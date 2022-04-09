@@ -16,14 +16,14 @@ pub struct XlsxLoader {
     workbook: Sheets,
     sheet_name: String,
     data: Vec<Vec<String>>,
-    header_map: HashMap<usize, Header>,
+    header_map: HashMap<usize, (Header, String)>,
 }
 pub trait Load {
     fn new(name: &'static str) -> Self;
     fn name(&self) -> &str;
     fn read(&mut self);
     fn raw_data(&self) -> &Vec<Vec<String>>;
-    fn map_data(&self) -> &HashMap<usize, Header>;
+    fn map_data(&self) -> &HashMap<usize, (Header, String)>;
 }
 
 //impl Load for CsvLoader {}
@@ -55,23 +55,22 @@ impl Load for XlsxLoader {
         String::as_str(&self.name)
     }
 
-    fn read(&mut self){
+    fn read(&mut self) {
         match self.workbook.worksheet_range(self.sheet_name.as_str()) {
             Some(Ok(range)) => {
                 let (rw, cl) = range.get_size();
                 for row in 0..rw {
                     let mut element: Vec<String> = Vec::new();
                     for column in 0..cl {
-
                         let s = match range.get((row, column)) {
                             Some(DataType::String(s)) => s.to_string(),
                             Some(DataType::Int(s)) => s.to_string(),
                             Some(DataType::Float(s)) => s.to_string(),
                             _ => "-".to_string(),
                         };
-                        let h = is_header_key(&s);
+                        let (h, label) = is_header_key(&s);
                         if h != Header::INVALID {
-                            self.header_map.insert(column, h);
+                            self.header_map.insert(column, (h, label));
                             continue;
                         }
                         element.push(s);
@@ -89,7 +88,7 @@ impl Load for XlsxLoader {
         &self.data
     }
 
-    fn map_data(&self) -> &HashMap<usize, Header> {
+    fn map_data(&self) -> &HashMap<usize, (Header, String)> {
         &self.header_map
     }
 }

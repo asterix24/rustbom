@@ -286,30 +286,33 @@ mod tests {
     }
 }
 
-pub fn is_header_key(item: &str) -> Header {
+pub fn is_header_key(item: &str) -> (Header, String) {
     let re_note = Regex::new(r"note\s(.*)").unwrap();
     let re_code = Regex::new(r"code\s(.*)").unwrap();
 
     match item.to_lowercase().as_str() {
-        "designator" => Header::Designator,
-        "comment" => Header::Comment,
-        "footprint" => Header::Footprint,
-        "description" => Header::Description,
-        "mounttechnology" | "mount_technology" => Header::MountTecnology,
-        "layer" => Header::Layer,
+        "designator" => (Header::Designator, "".to_string()),
+        "comment" => (Header::Comment, "".to_string()),
+        "footprint" => (Header::Footprint, "".to_string()),
+        "description" => (Header::Description, "".to_string()),
+        "mounttechnology" | "mount_technology" => (Header::MountTecnology, "".to_string()),
+        "layer" => (Header::Layer, "".to_string()),
         _ => {
-            let mut value = Header::INVALID; 
+            let mut value = Header::INVALID;
+            let mut label = "".to_string();
             if let Some(cc) = re_code.captures(item.to_lowercase().as_ref()) {
                 if let Some(m) = cc.get(1).map(|m| m.as_str()) {
                     value = Header::ExtraCode;
+                    label = m.to_string();
                 }
             }
             if let Some(cc) = re_note.captures(item.to_lowercase().as_ref()) {
                 if let Some(m) = cc.get(1).map(|m| m.as_str()) {
-                   value = Header::ExtraNote
+                   value = Header::ExtraNote;
+                   label = m.to_string();
                 }
             }
-            value
+            (value, label)
         }
     }
 }
