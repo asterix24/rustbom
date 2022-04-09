@@ -1,30 +1,40 @@
-use tide::Request;
+use tide::{http::mime, Body, Redirect, Request, Response, Server, StatusCode};
 use tide::prelude::*;
 
-mod items;
+mod lib;
+use lib::load::{Load, XlsxLoader};
+use lib::item::Item;
 
 #[derive(Debug, Deserialize)]
-struct Animal {
+struct Due {
     name: String,
-    legs: u16,
+    reference: String,
 }
 
 #[async_std::main]
 async fn main() -> tide::Result<()> {
+    tide::log::start();
     let mut app = tide::new();
-    app.at("/orders/shoes").post(order_shoes);
-    app.at("/").post(uno_post);
+    app.at("/").get(uno_post);
     app.listen("127.0.0.1:8080").await?;
     Ok(())
 }
 
-async fn order_shoes(mut req: Request<()>) -> tide::Result {
-    let Animal { name, legs } = req.body_json().await?;
-    Ok(format!("Hello, {}! I've put in an order for {} shoes", name, legs).into())
-}
-
 async fn uno_post(mut req: Request<()>) -> tide::Result {
-    let Animal { name, legs } = req.body_json().await?;
-    
-    Ok(items::uno(name, legs).into())
+    //let uno = req.body_form().await?;
+    let mut ld: XlsxLoader = Load::new("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx");
+
+    ld.read();
+    let d = ld.raw_data();
+    let mut items: Vec<Item> = Vec::new();
+    for row in  d {
+        let mut item = Item::new();
+        item.push(row, ld.map_data());
+        items.push(item);
+    }
+
+    let ret = serde_json::to_string(&items).unwrap();
+    tide::log::info!("{}", ret);
+
+    Ok(Response::builder(StatusCode::Ok).body(Body::from_json(&ret)?).build())
 }
