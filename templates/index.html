@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>MergeBom Web</title>
+</head>
+
+<body>
+    <div id="content">
+        <h1>MergeBom Web</h1>
+        <p id="error"></p>
+        <form onsubmit="itemList(event)">
+            <input type="submit" value="Update" />
+        </form>
+    </div>
+    <div>
+        <p>
+        <ul id="dataList"></ul>
+        </p>
+    </div>
+    <div id="footer">
+        &copy; Copyright 2022 asterix24@gmail.com
+    </div>
+    <script>
+        async function itemList(event) {
+            event.preventDefault();
+            const response = await fetch("/data", {
+                method: 'POST',
+                body: "{\'field\':\'test\'}"
+            });
+
+            response.json().then(data => {
+                console.log(data);
+                l = document.getElementById("dataList");
+                Object.entries(data).forEach(([idx, value]) => {
+                    let li = document.createElement("li");
+                    li.innerText = value.unique_id;
+                    l.appendChild(li);
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>
