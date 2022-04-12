@@ -1,10 +1,10 @@
 use super::utils::guess_category;
 use serde::{Deserialize, Serialize};
 
-use std::fmt;
-use std::collections::HashMap;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Ord, Deserialize, Serialize)]
 pub enum Category {
@@ -19,9 +19,8 @@ pub enum Category {
     Transformes,
     Cristal,
     IC,
-    IVALID,
+    Invalid,
 }
-
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Ord, Copy, Deserialize, Serialize)]
 pub enum Header {
@@ -34,9 +33,8 @@ pub enum Header {
     Layer,
     ExtraCode,
     ExtraNote,
-    INVALID,
+    Invalid,
 }
-
 
 impl fmt::Display for Category {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -65,16 +63,15 @@ pub struct Item {
     extra: Vec<ExtraCol>,
 }
 impl Item {
-    pub fn new(
-    ) -> Self {
+    pub fn new() -> Self {
         let local_item = Self {
             unique_id: "".to_string(),
             is_merged: false,
             is_not_populated: false,
-            category: Category::IVALID,
+            category: Category::Invalid,
             designator: vec![],
             comment: "".to_string(),
-            footprint: "".to_string(),  
+            footprint: "".to_string(),
             description: "".to_string(),
             mount_type: "".to_string(),
             layer: "".to_string(),
@@ -82,6 +79,7 @@ impl Item {
         };
         local_item
     }
+
     pub fn get_unique_id(&self) -> &str {
         &self.unique_id
     }
@@ -95,23 +93,23 @@ impl Item {
             // traspone raw data to item data
             match hdr {
                 Header::Designator => {
-                    self.designator = field.split(",").map(|s| s.to_string()).collect();
-                },
+                    self.designator = field.split(',').map(|s| s.to_string()).collect();
+                }
                 Header::Comment => {
                     self.comment = field.clone();
-                },
+                }
                 Header::Footprint => {
                     self.footprint = field.clone();
-                },
+                }
                 Header::Description => {
                     self.description = field.clone();
-                },
+                }
                 Header::MountTecnology => {
                     self.mount_type = field.clone();
-                },
+                }
                 Header::Layer => {
                     self.layer = field.clone();
-                },
+                }
                 Header::ExtraCode => {
                     self.extra.push(ExtraCol {
                         label: format!("Code {}", label).to_string(),
@@ -126,22 +124,22 @@ impl Item {
                 }
                 _ => {
                     // do nothing
-                },
+                }
             }
-            
-            /* 
-            * To merge items, we need to have a unique id comuted taking into account
-            * the component category and some keywords contained in the comment field.
-            * In order to avoid wrong merge, first we skip all line that are marked with
-            * NP (Not-Poupulated)
-            */
+
+            /*
+             * To merge items, we need to have a unique id comuted taking into account
+             * the component category and some keywords contained in the comment field.
+             * In order to avoid wrong merge, first we skip all line that are marked with
+             * NP (Not-Poupulated)
+             */
             lazy_static! {
                 static ref RE: Regex = Regex::new("^NP ").unwrap();
             }
             if RE.is_match(&self.comment) {
                 self.is_not_populated = true;
             }
-            
+
             self.category = guess_category(self.designator.first().unwrap_or(&"".to_string()));
             match self.category {
                 Category::Connectors => {
@@ -151,7 +149,8 @@ impl Item {
                     } else {
                         self.comment = "Connector".to_string();
                     }
-                    self.unique_id = format!("{}-{}-{}", self.description, self.comment, self.footprint);
+                    self.unique_id =
+                        format!("{}-{}-{}", self.description, self.comment, self.footprint);
                     self.is_merged = true;
                 }
                 Category::Mechanicals => {
@@ -160,7 +159,7 @@ impl Item {
                         self.comment = "Tactile Switch".to_string();
                         self.is_merged = true;
                     }
-                },
+                }
                 Category::Diode => {
                     if self.footprint.to_lowercase().contains("LED") {
                         self.unique_id = format!("{}-{}", self.description, self.footprint);
@@ -169,16 +168,18 @@ impl Item {
                     }
                 }
                 Category::IC => {
-                    if self.footprint.to_lowercase().contains("rele") ||
-                     self.footprint.to_lowercase().contains("relay") {
+                    if self.footprint.to_lowercase().contains("rele")
+                        || self.footprint.to_lowercase().contains("relay")
+                    {
                         self.unique_id = format!("{}-{}", self.description, self.footprint);
                         self.comment = "Relay, Rele\'".to_string();
                         self.is_merged = true;
                     }
                 }
                 _ => {
-                    self.unique_id = format!("{}-{}-{}", self.description, self.comment, self.footprint);
-                },
+                    self.unique_id =
+                        format!("{}-{}-{}", self.description, self.comment, self.footprint);
+                }
             }
             for i in &self.extra {
                 self.unique_id = format!("{}-{}", self.unique_id, i.value);
@@ -186,4 +187,3 @@ impl Item {
         }
     }
 }
-

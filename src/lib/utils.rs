@@ -1,4 +1,4 @@
-use super::item::{Category,Header};
+use super::item::Category;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -119,7 +119,7 @@ pub fn guess_category<S: AsRef<str>>(designator: S) -> Category {
     }
 
     match RE.captures(designator.as_ref()) {
-        None => Category::IVALID,
+        None => Category::Invalid,
         Some(cc) => match String::from(cc.get(1).map_or("", |m| m.as_str()))
             .to_uppercase()
             .as_ref()
@@ -282,37 +282,6 @@ mod tests {
 
         for data in test_data.iter() {
             assert_eq!(detect_measure_unit(data[0]), data[1]);
-        }
-    }
-}
-
-pub fn is_header_key(item: &str) -> (Header, String) {
-    let re_note = Regex::new(r"note\s(.*)").unwrap();
-    let re_code = Regex::new(r"code\s(.*)").unwrap();
-
-    match item.to_lowercase().as_str() {
-        "designator" => (Header::Designator, "".to_string()),
-        "comment" => (Header::Comment, "".to_string()),
-        "footprint" => (Header::Footprint, "".to_string()),
-        "description" => (Header::Description, "".to_string()),
-        "mounttechnology" | "mount_technology" => (Header::MountTecnology, "".to_string()),
-        "layer" => (Header::Layer, "".to_string()),
-        _ => {
-            let mut value = Header::INVALID;
-            let mut label = "".to_string();
-            if let Some(cc) = re_code.captures(item.to_lowercase().as_ref()) {
-                if let Some(m) = cc.get(1).map(|m| m.as_str()) {
-                    value = Header::ExtraCode;
-                    label = m.to_string();
-                }
-            }
-            if let Some(cc) = re_note.captures(item.to_lowercase().as_ref()) {
-                if let Some(m) = cc.get(1).map(|m| m.as_str()) {
-                   value = Header::ExtraNote;
-                   label = m.to_string();
-                }
-            }
-            (value, label)
         }
     }
 }
