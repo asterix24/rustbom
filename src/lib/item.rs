@@ -1,9 +1,9 @@
+use super::bom::{BomFieldMap, BomRow};
 use super::utils::guess_category;
-use serde::{Deserialize, Serialize};
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Ord, Deserialize, Serialize)]
@@ -62,9 +62,10 @@ pub struct Item {
     layer: String,
     extra: Vec<ExtraCol>,
 }
+
 impl Item {
     pub fn new() -> Self {
-        let local_item = Self {
+        Self {
             unique_id: "".to_string(),
             is_merged: false,
             is_not_populated: false,
@@ -76,17 +77,16 @@ impl Item {
             mount_type: "".to_string(),
             layer: "".to_string(),
             extra: vec![],
-        };
-        local_item
+        }
     }
 
     pub fn get_unique_id(&self) -> &str {
         &self.unique_id
     }
 
-    pub fn push(&mut self, row: &Vec<String>, header: &HashMap<usize, (Header, String)>) {
-        for (n, field) in row.iter().enumerate() {
-            let (hdr, label) = match header.get(&n) {
+    pub fn insert(&mut self, row: &BomRow, header: &BomFieldMap) {
+        for (n, field) in bom_row.row.iter().enumerate() {
+            let (hdr, label) = match bom_header.get(&n) {
                 Some(h) => h,
                 None => continue,
             };

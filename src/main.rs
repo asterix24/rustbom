@@ -1,14 +1,13 @@
-use askama::Template;
 use axum::routing::post;
-use axum::{extract::Form, response::Html, routing::get, Json, Router};
+use axum::{response::Html, routing::get, Json, Router};
 use serde::Deserialize;
-use serde_json::json;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
+use lib::bom::Bom;
 use lib::item::Item;
-use lib::load::{Load, XlsxLoader};
+use lib::load::XlsxLoader;
 
 #[tokio::main]
 async fn main() {
@@ -19,9 +18,10 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app = Router::new()
+    let app: _ = Router::new()
         .route("/", get(show_form))
-        .route("/data/", post(merge_view_post));
+        .route("/test", get(testfoo))
+        .route("/data", post(merge_view_post));
 
     // run it with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -48,8 +48,10 @@ struct Input {
     email: String,
 }
 
-async fn preview_post(Form(input): Form<Input>) {
-    dbg!(&input);
+async fn testfoo() -> Json<Bom> {
+    let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
+    //println!("{:?}", bom);
+    Json(bom)
 }
 
 // async fn preview_post(mut req: Request<()>) -> tide::Result {

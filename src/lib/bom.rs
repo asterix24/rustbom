@@ -1,32 +1,35 @@
-use crate::lib::item::Header;
+use super::item::{Header, Item};
+
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct BomFieldMap {
+pub struct BomFieldMap {
     header: Header,
     label: String,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct BomRow {
+pub struct BomRow {
     row: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Bom {
     headers: HashMap<usize, BomFieldMap>,
-    items: Vec<BomRow>,
+    rows: Vec<BomRow>,
+    items: Vec<Item>,
 }
 
 impl Bom {
     pub fn new() -> Bom {
         Self {
             headers: HashMap::new(),
+            rows: vec![],
             items: vec![],
         }
     }
-    pub fn insert_header(&mut self, index: usize, item: &str) {
+    pub fn insert_if_header(&mut self, index: usize, item: &str) {
         let mut header_map = BomFieldMap {
             header: Header::Invalid,
             label: "".to_string(),
@@ -38,9 +41,11 @@ impl Bom {
             self.headers.insert(index, header_map);
         }
     }
-    pub fn insert_row(&mut self, row: &Vec<String>) {
+    pub fn insert_row(&mut self, row: &[String]) {
         if !row.is_empty() {
-            self.items.push(BomRow { row: row.clone() });
+            self.rows.push(BomRow {
+                row: row.to_owned(),
+            });
         }
     }
 }

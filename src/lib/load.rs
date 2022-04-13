@@ -37,7 +37,7 @@ impl XlsxLoader {
                             Some(DataType::Float(s)) => s.to_string(),
                             _ => "-".to_string(),
                         };
-                        bom.insert_header(column, &s);
+                        bom.insert_if_header(column, &s);
                         element.push(s);
                     }
                     bom.insert_row(&element);
