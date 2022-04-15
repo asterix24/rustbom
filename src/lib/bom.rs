@@ -1,104 +1,84 @@
-use super::item::{Header, Item};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
-use regex::Regex;
+use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct BomFieldMap {
-    header: Header,
-    label: String,
-}
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct BomRow {
-    row: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Bom {
-    headers: HashMap<usize, BomFieldMap>,
-    rows: Vec<BomRow>,
     items: Vec<Item>,
 }
 
 impl Bom {
-    pub fn new() -> Bom {
-        Self {
-            headers: HashMap::new(),
-            rows: vec![],
-            items: vec![],
-        }
+    pub fn from_csv<P: AsRef<Path>>(path: P) -> Result<Bom> {
+        let mut rd = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_path(path)?;
+
+        let headers: HeaderMap = rd.headers()?.iter().map(String::from).enumerate().collect();
+
+        let rows = rd
+            .into_records()
+            .flatten()
+            .map(|record| record.iter().map(String::from).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
+        Bom::from_rows_and_headers(&rows, &headers)
     }
-    pub fn insert_if_header(&mut self, index: usize, item: &str) {
-        let mut header_map = BomFieldMap {
-            header: Header::Invalid,
-            label: "".to_string(),
-        };
-        let header_field = is_header_key(item);
-        if header_field.header != Header::Invalid {
-            header_map.header = header_field.header;
-            header_map.label = header_field.label;
-            self.headers.insert(index, header_map);
-        }
+
+    fn from_rows_and_headers(rows: &[Vec<String>], headers: &HeaderMap) -> Result<Bom> {
+        let items: Vec<_> = rows
+            .iter()
+            .map(|row| Self::parse_row(row, headers))
+            .collect::<Result<_>>()?;
+
+        Ok(Bom { items })
     }
-    pub fn insert_row(&mut self, row: &[String]) {
-        if !row.is_empty() {
-            self.rows.push(BomRow {
-                row: row.to_owned(),
-            });
+
+    fn parse_row(row: &[String], headers: &HeaderMap) -> Result<Item> {
+        let mut fields = HashSet::new();
+
+        for (i, field) in row.iter().enumerate() {
+            let header = headers.get(&i).ok_or_else(|| anyhow!("missing header"))?;
+            let field = Field::from_header_and_value(header, field)?;
+            fields.insert(field);
         }
+
+        Ok(Item { fields })
+    }
+
+    pub fn items(&self) -> &[Item] {
+        &self.items
     }
 }
 
-fn is_header_key(item: &str) -> BomFieldMap {
-    let re_note = Regex::new(r"note\s(.*)").unwrap();
-    let re_code = Regex::new(r"code\s(.*)").unwrap();
+pub type HeaderMap = HashMap<usize, String>;
 
-    match item.to_lowercase().as_str() {
-        "designator" => BomFieldMap {
-            header: Header::Designator,
-            label: "".to_string(),
-        },
-        "comment" => BomFieldMap {
-            header: Header::Comment,
-            label: "".to_string(),
-        },
-        "footprint" => BomFieldMap {
-            header: Header::Footprint,
-            label: "".to_string(),
-        },
-        "description" => BomFieldMap {
-            header: Header::Description,
-            label: "".to_string(),
-        },
-        "mounttechnology" | "mount_technology" => BomFieldMap {
-            header: Header::MountTecnology,
-            label: "".to_string(),
-        },
-        "layer" => BomFieldMap {
-            header: Header::Layer,
-            label: "".to_string(),
-        },
-        _ => {
-            let mut value = Header::Invalid;
-            let mut label = "".to_string();
-            if let Some(cc) = re_code.captures(item.to_lowercase().as_ref()) {
-                if let Some(m) = cc.get(1).map(|m| m.as_str()) {
-                    value = Header::ExtraCode;
-                    label = m.to_string();
-                }
-            }
-            if let Some(cc) = re_note.captures(item.to_lowercase().as_ref()) {
-                if let Some(m) = cc.get(1).map(|m| m.as_str()) {
-                    value = Header::ExtraNote;
-                    label = m.to_string();
-                }
-            }
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct Item {
+    fields: HashSet<Field>,
+}
 
-            BomFieldMap {
-                header: value,
-                label,
-            }
-        }
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Field {
+    Quantity(u32),
+    Designator(String),
+    Comment(String),
+    Footprint(String),
+    Description(String),
+}
+
+impl Field {
+    fn from_header_and_value(header: &str, value: &str) -> Result<Field> {
+        Ok(match header {
+            "Quantity" => Field::Quantity(value.parse()?),
+            "Designator" => Field::Designator(value.to_string()),
+            "Comment" => Field::Comment(value.to_string()),
+            "Footprint" => Field::Footprint(value.to_string()),
+            "Description" => Field::Description(value.to_string()),
+            _ => bail!("unknown header"),
+        })
     }
 }

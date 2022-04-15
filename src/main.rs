@@ -1,13 +1,14 @@
 use axum::routing::post;
 use axum::{response::Html, routing::get, Json, Router};
-use serde::Deserialize;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
-use lib::bom::Bom;
-use lib::item::Item;
-use lib::load::XlsxLoader;
+use lib::bom::{Bom, Item};
+use serde::{Deserialize, Serialize};
+
+// use lib::item::Item;
+//use lib::load::XlsxLoader;
 
 #[tokio::main]
 async fn main() {
@@ -20,8 +21,8 @@ async fn main() {
 
     let app: _ = Router::new()
         .route("/", get(show_form))
-        .route("/test", get(testfoo))
-        .route("/data", post(merge_view_post));
+        .route("/test", get(testfoo));
+    // .route("/data", post(merge_view_post));
 
     // run it with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -36,22 +37,27 @@ async fn show_form() -> Html<&'static str> {
     Html(std::include_str!("../templates/index.html"))
 }
 
-async fn merge_view_post() -> Json<Item> {
-    let item = Item::new();
-    Json(item)
-}
+// async fn merge_view_post() -> Json<Item> {
+//     let item = Item::new();
+//     Json(item)
+// }
 
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
+#[derive(Deserialize, Serialize, Debug)]
 struct Input {
     name: String,
     email: String,
 }
 
-async fn testfoo() -> Json<Bom> {
-    let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
+async fn testfoo() -> Json<Input> {
+    //let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
+    let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
+    println!("{:#?}", bom.items());
+
     //println!("{:?}", bom);
-    Json(bom)
+    Json(Input {
+        name: "test".to_string(),
+        email: "".to_string(),
+    })
 }
 
 // async fn preview_post(mut req: Request<()>) -> tide::Result {
