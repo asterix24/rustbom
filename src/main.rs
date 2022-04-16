@@ -48,16 +48,22 @@ struct Input {
     email: String,
 }
 
-async fn testfoo() -> Json<Input> {
+async fn testfoo() -> Json<Bom> {
     //let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
-    let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
-    println!("{:#?}", bom.items());
-
+    //let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
+    let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx");
+    // match bom {
+    //     Ok(bom) => {
+    //         println!("{:#?}", bom.items());
+    //     }
+    //     Err(e) => panic!("Qui..{}", e),
+    // }
+    Json(bom.unwrap())
     //println!("{:?}", bom);
-    Json(Input {
-        name: "test".to_string(),
-        email: "".to_string(),
-    })
+    // Json(Input {
+    //     name: "test".to_string(),
+    //     email: "".to_string(),
+    // })
 }
 
 // async fn preview_post(mut req: Request<()>) -> tide::Result {
