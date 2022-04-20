@@ -1,4 +1,3 @@
-use super::item::Category;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -110,35 +109,6 @@ pub fn convert_comment_to_value(comment: &str) -> (f32, i32) {
 
             (base, mult)
         }
-    }
-}
-
-pub fn guess_category<S: AsRef<str>>(designator: S) -> Category {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"^([a-zA-Z_]{1,3})").unwrap();
-    }
-
-    match RE.captures(designator.as_ref()) {
-        None => Category::Invalid,
-        Some(cc) => match String::from(cc.get(1).map_or("", |m| m.as_str()))
-            .to_uppercase()
-            .as_ref()
-        {
-            "J" | "X" | "P" | "SIM" => Category::Connectors,
-            "S" | "SCR" | "SPA" | "BAT" | "BUZ" | "BT" | "B" | "SW" | "MP" | "K" => {
-                Category::Mechanicals
-            }
-            "F" | "FU" => Category::Fuses,
-            "R" | "RN" | "R_G" => Category::Resistors,
-            "C" | "CAP" => Category::Capacitors,
-            "D" | "DZ" => Category::Diode,
-            "L" => Category::Inductors,
-            "Q" => Category::Transistor,
-            "TR" => Category::Transformes,
-            "Y" => Category::Cristal,
-            "U" => Category::IC,
-            _ => panic!("Invalid category[{:#?}]", designator.as_ref()),
-        },
     }
 }
 
