@@ -30,13 +30,14 @@
             });
 
             response.json().then(data => {
-                console.log(data);
+                console.log(data.items);
                 l = document.getElementById("dataList");
-                Object.entries(data).forEach(([idx, value]) => {
+                for (let i = 0; i < data.items.length; i++) {
+                    console.log(data.items[i]);
                     let li = document.createElement("li");
-                    li.innerText = value.unique_id;
+                    li.innerText = data.items[i].fields.UniqueID;
                     l.appendChild(li);
-                });
+                };
             });
         }
     </script>

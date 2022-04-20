@@ -4,8 +4,8 @@ use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
-use lib::bom::{Bom, Item};
-use serde::{Deserialize, Serialize};
+use lib::bom::Bom;
+//use serde::{Deserialize, Serialize};
 
 // use lib::item::Item;
 //use lib::load::XlsxLoader;
@@ -21,8 +21,7 @@ async fn main() {
 
     let app: _ = Router::new()
         .route("/", get(show_form))
-        .route("/test", get(testfoo));
-    // .route("/data", post(merge_view_post));
+        .route("/data", post(merge_view_post));
 
     // run it with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -37,27 +36,16 @@ async fn show_form() -> Html<&'static str> {
     Html(std::include_str!("../templates/index.html"))
 }
 
-// async fn merge_view_post() -> Json<Item> {
-//     let item = Item::new();
-//     Json(item)
-// }
-
-#[derive(Deserialize, Serialize, Debug)]
-struct Input {
-    name: String,
-    email: String,
-}
-
-async fn testfoo() -> Json<Bom> {
+async fn merge_view_post() -> Json<Bom> {
     //let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
     //let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
-    let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx");
-    // match bom {
-    //     Ok(bom) => {
-    //         println!("{:#?}", bom.items());
-    //     }
-    //     Err(e) => panic!("Qui..{}", e),
-    // }
+    let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/bom.xlsx");
+    match &bom {
+        Ok(bom) => {
+            println!("{:#?}", bom.get_items());
+        }
+        Err(e) => panic!("Qui..{}", e),
+    }
     Json(bom.unwrap())
     //println!("{:?}", bom);
     // Json(Input {
@@ -65,24 +53,3 @@ async fn testfoo() -> Json<Bom> {
     //     email: "".to_string(),
     // })
 }
-
-// async fn preview_post(mut req: Request<()>) -> tide::Result {
-//     //let uno = req.body_json().await?;
-//     //ide::log::info!("{:?}", uno);
-//     let mut ld: XlsxLoader = Load::new("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx");
-
-//     ld.read();
-//     let d = ld.raw_data();
-//     let mut items: Vec<Item> = Vec::new();
-
-//     for row in d {
-//         let mut item = Item::new();
-//         item.push(row, ld.map_data());
-//         items.push(item);
-//     }
-
-//     match Body::from_json(&items) {
-//         Ok(body) => Ok(body.into()),
-//         Err(_) => Ok(Response::new(StatusCode::NotFound)),
-//     }
-// }

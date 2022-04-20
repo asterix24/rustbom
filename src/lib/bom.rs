@@ -23,10 +23,13 @@ fn is_header_key(item: &str) -> Result<String> {
 
     match item.to_lowercase().as_str() {
         "designator" | "comment" | "footprint" | "description" | "layer" => {
-            println!("{}", item);
+            println!("Standard: {}", item);
             Ok(uppercase_first_letter(item))
         }
-        "mounttechnology" | "mount_technology" => Ok("Mount Technology".to_string()),
+        "mounttechnology" | "mount_technology" => {
+            println!("Standard: {}", item);
+            Ok("Mount Technology".to_string())
+        }
         _ => {
             let mut res = "".to_string();
             if let Some(cc) = re_code.captures(item.to_lowercase().as_ref()) {
@@ -42,7 +45,7 @@ fn is_header_key(item: &str) -> Result<String> {
             if res.is_empty() {
                 bail!("Invalid header key")
             } else {
-                println!("{}", res);
+                println!("Found Extra: {}", res);
                 Ok(res)
             }
         }
@@ -62,6 +65,10 @@ fn generate_uuid(item: Item) -> Result<Item> {
     let mut footprint = "".to_string();
     let mut unique_id = "".to_string();
     let mut fields = HashSet::new();
+
+    if item.fields.len() == 0 {
+        bail!("No fields found");
+    }
 
     for i in item.fields.iter() {
         match i {
@@ -91,18 +98,19 @@ fn generate_uuid(item: Item) -> Result<Item> {
                     // Overwrite comment, we want merge connectors, that they
                     // could have different comment, so we need to replace it
                     fields.insert(Field::Comment(comment.clone()));
-                    fields.insert(Field::UniqueId(unique_id.clone()));
                     fields.insert(Field::IsMerged(true));
                 }
                 Category::Mechanicals => {
                     if footprint.to_lowercase().contains("tactile") {
                         unique_id = format!("{}-{}-tactile", description, footprint);
-
                         // Overwrite comment, we want merge connectors, that they
                         // could have different comment, so we need to replace it
                         fields.insert(Field::Comment("Tactile Switch".to_string()));
-                        fields.insert(Field::UniqueId(unique_id.clone()));
                         fields.insert(Field::IsMerged(true));
+                    } else {
+                        unique_id = format!("{}-{}-{}", description, comment, footprint);
+                        fields.insert(Field::IsNP(false));
+                        fields.insert(Field::IsMerged(false));
                     }
                 }
                 Category::Diode => {
@@ -112,8 +120,11 @@ fn generate_uuid(item: Item) -> Result<Item> {
                         // Overwrite comment, we want merge connectors, that they
                         // could have different comment, so we need to replace it
                         fields.insert(Field::Comment("Diode LED".to_string()));
-                        fields.insert(Field::UniqueId(unique_id.clone()));
                         fields.insert(Field::IsMerged(true));
+                    } else {
+                        unique_id = format!("{}-{}-{}", description, comment, footprint);
+                        fields.insert(Field::IsNP(false));
+                        fields.insert(Field::IsMerged(false));
                     }
                 }
                 Category::IC => {
@@ -121,37 +132,75 @@ fn generate_uuid(item: Item) -> Result<Item> {
                         || footprint.to_lowercase().contains("relay")
                     {
                         unique_id = format!("{}-{}-relay", description, footprint);
-
                         // Overwrite comment, we want merge connectors, that they
                         // could have different comment, so we need to replace it
                         fields.insert(Field::Comment("Relay, Rele\'".to_string()));
-                        fields.insert(Field::UniqueId(unique_id.clone()));
                         fields.insert(Field::IsMerged(true));
+                    } else {
+                        unique_id = format!("{}-{}-{}", description, comment, footprint);
+                        fields.insert(Field::IsNP(false));
+                        fields.insert(Field::IsMerged(false));
                     }
                 }
                 _ => {
-                    fields.insert(Field::UniqueId(format!(
-                        "{}-{}-{}",
-                        description, comment, footprint
-                    )));
+                    unique_id = format!("{}-{}-{}", description, comment, footprint);
                     fields.insert(Field::IsNP(false));
                     fields.insert(Field::IsMerged(false));
                 }
             },
-            Field::ExtraCode(c) | Field::ExtraNote(c) => {
-                fields.insert(Field::UniqueId(format!(
-                    "{}-extra-{}",
-                    unique_id.clone(),
-                    c.join("-")
-                )));
+            Field::Extra(c) => {
+                unique_id = format!("{}-extra-{}", unique_id.clone(), c.1);
             }
             other => {
-                println!("{:?}", other);
                 fields.insert(other.clone());
             }
         }
     }
+
+    fields.insert(Field::UniqueId(unique_id));
+
+    println!("len {:?}", fields.len());
     Ok(Item { fields })
+}
+
+fn xlsx_loader<P: AsRef<Path>>(path: P) -> (Vec<Vec<String>>, HeaderMap) {
+    let mut workbook = match open_workbook_auto(path) {
+        Ok(wb) => wb,
+        Err(e) => panic!("{} Error while parsing file", e),
+    };
+    let sheet_name = match workbook.sheet_names().first() {
+        Some(name) => name.to_string(),
+        None => panic!("No sheet found in file"),
+    };
+
+    let mut headers: HeaderMap = HashMap::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    match workbook.worksheet_range(sheet_name.as_str()) {
+        Some(Ok(range)) => {
+            let (rw, cl) = range.get_size();
+            for row in 0..rw {
+                let mut element = Vec::new();
+                for column in 0..cl {
+                    let s = match range.get((row, column)) {
+                        Some(DataType::String(s)) => s.to_string(),
+                        Some(DataType::Int(s)) => s.to_string(),
+                        Some(DataType::Float(s)) => s.to_string(),
+                        _ => "-".to_string(),
+                    };
+                    if let Ok(m) = is_header_key(&s) {
+                        headers.insert(column, m);
+                    } else {
+                        element.push(s);
+                    }
+                }
+                if !element.is_empty() {
+                    rows.push(element.clone());
+                }
+            }
+        }
+        _ => panic!("Male.."),
+    }
+    (rows, headers)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -177,44 +226,7 @@ impl Bom {
     }
 
     pub fn from_xlsx<P: AsRef<Path>>(path: P) -> Result<Bom> {
-        let mut workbook = match open_workbook_auto(path) {
-            Ok(wb) => wb,
-            Err(e) => panic!("{} Error while parsing file", e),
-        };
-        let sheet_name = match workbook.sheet_names().first() {
-            Some(name) => name.to_string(),
-            None => panic!("No sheet found in file"),
-        };
-
-        let mut headers: HeaderMap = HashMap::new();
-        let mut rows: Vec<Vec<String>> = Vec::new();
-        match workbook.worksheet_range(sheet_name.as_str()) {
-            Some(Ok(range)) => {
-                let (rw, cl) = range.get_size();
-                for row in 0..rw {
-                    let mut element = Vec::new();
-                    for column in 0..cl {
-                        let s = match range.get((row, column)) {
-                            Some(DataType::String(s)) => s.to_string(),
-                            Some(DataType::Int(s)) => s.to_string(),
-                            Some(DataType::Float(s)) => s.to_string(),
-                            _ => "-".to_string(),
-                        };
-                        if let Ok(m) = is_header_key(&s) {
-                            println!(">> {} {}", m, s);
-                            headers.insert(column, m);
-                        }
-                        element.push(s);
-                    }
-                    if !element.is_empty() {
-                        rows.push(element.clone());
-                    }
-                }
-            }
-            _ => panic!("Male.."),
-        }
-
-        println!("... {:?}", headers);
+        let (rows, headers) = xlsx_loader(path);
         Bom::from_rows_and_headers(&rows, &headers)
     }
 
@@ -232,7 +244,6 @@ impl Bom {
 
     fn parse_row(row: &[String], headers: &HeaderMap) -> Result<Item> {
         let mut fields = HashSet::new();
-
         for (i, field) in row.iter().enumerate() {
             let header = match headers.get(&i) {
                 Some(h) => h,
@@ -243,28 +254,24 @@ impl Bom {
             };
 
             if header.is_empty() {
+                println!("Header is empty, skip it");
                 continue;
             }
 
             if let Ok(m) = Field::from_header_and_value(header, field) {
                 fields.insert(m);
-            } else {
-                println!("Not Valid {} {}", header, field);
             }
-
             if let Ok(m) = Field::category_from_designator(header, field) {
                 fields.insert(m);
-            } else {
-                println!("Not Valid {} {}", header, field);
             }
         }
+        println!("**** {:?}", fields);
 
         let fields_with_uuid = generate_uuid(Item { fields })?;
-
         Ok(fields_with_uuid)
     }
 
-    pub fn items(&self) -> &[Item] {
+    pub fn get_items(&self) -> &[Item] {
         &self.items
     }
 }
@@ -303,6 +310,7 @@ pub type HeaderMap = HashMap<usize, String>;
 pub struct Item {
     fields: HashSet<Field>,
 }
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Category {
     Connectors,
@@ -329,21 +337,44 @@ pub enum Field {
     Comment(String),
     Footprint(String),
     Description(String),
-    ExtraCode(Vec<String>),
-    ExtraNote(Vec<String>),
+    Extra((String, String)),
     Invalid(String),
 }
 
 impl Field {
     fn from_header_and_value(header: &str, value: &str) -> Result<Field> {
+        let re_note = Regex::new(r"note\s(.*)").unwrap();
+        let re_code = Regex::new(r"code\s(.*)").unwrap();
+
         let field: Field = match header {
-            "Designator" => {
-                Field::Designator(value.to_string().split(',').map(String::from).collect())
-            }
+            "Designator" => Field::Designator(
+                value
+                    .to_string()
+                    .split(',')
+                    .map(|m| m.trim().to_string())
+                    .collect(),
+            ),
             "Comment" => Field::Comment(value.to_string()),
             "Footprint" => Field::Footprint(value.to_string()),
             "Description" => Field::Description(value.to_string()),
-            _ => Field::Invalid("-".to_string()),
+            other => {
+                let mut extra = String::new();
+                if let Some(cc) = re_code.captures(other.to_lowercase().as_ref()) {
+                    if let Some(m) = cc.get(1).map(|m| m.as_str()) {
+                        extra = m.to_string();
+                    }
+                }
+                if let Some(cc) = re_note.captures(other.to_lowercase().as_ref()) {
+                    if let Some(m) = cc.get(1).map(|m| m.as_str()) {
+                        extra = m.to_string();
+                    }
+                }
+                if !extra.is_empty() {
+                    Field::Extra((other.to_string(), value.to_string()))
+                } else {
+                    Field::Invalid("-".to_string())
+                }
+            }
         };
 
         if field == Field::Invalid("-".to_string()) {
@@ -352,6 +383,7 @@ impl Field {
             Ok(field)
         }
     }
+
     fn category_from_designator(header: &str, value: &str) -> Result<Field> {
         if header == "Designator" {
             let category = guess_category(value)?;
@@ -359,5 +391,105 @@ impl Field {
         } else {
             bail!("No valid category field {}", value);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::lib::bom;
+
+    use super::*;
+    #[test]
+    fn test_xlsx_loader() {
+        let (_, headers) = xlsx_loader("boms/bom.xlsx");
+        let mut check_headers: HeaderMap = HashMap::new();
+
+        check_headers.insert(1, "Designator".to_string());
+        check_headers.insert(2, "Comment".to_string());
+        check_headers.insert(3, "Footprint".to_string());
+        check_headers.insert(4, "Description".to_string());
+        check_headers.insert(5, "Note Uno".to_string());
+        check_headers.insert(6, "Code Due".to_string());
+        check_headers.insert(7, "Layer".to_string());
+        check_headers.insert(8, "Mount Technology".to_string());
+        check_headers.insert(11, "Code Farnell".to_string());
+        check_headers.insert(12, "Code Mouser".to_string());
+        check_headers.insert(13, "Note Mouser".to_string());
+        check_headers.insert(14, "Code Digikey".to_string());
+
+        println!("{:#?}", check_headers);
+        println!("{:#?}", headers);
+        for i in check_headers.iter() {
+            println!("{}", i.1);
+            assert_eq!(i.1, headers.get(i.0).unwrap());
+        }
+    }
+    #[test]
+    fn test_parse_row() {
+        let mut check_headers: HeaderMap = HashMap::new();
+
+        check_headers.insert(1, "Designator".to_string());
+        check_headers.insert(2, "Comment".to_string());
+        check_headers.insert(3, "Footprint".to_string());
+        check_headers.insert(4, "Description".to_string());
+        check_headers.insert(5, "Note Uno".to_string());
+        check_headers.insert(6, "Code Due".to_string());
+        check_headers.insert(7, "Layer".to_string());
+        check_headers.insert(8, "Mount Technology".to_string());
+        check_headers.insert(11, "Code Farnell".to_string());
+        check_headers.insert(12, "Code Mouser".to_string());
+        check_headers.insert(13, "Note Mouser".to_string());
+        check_headers.insert(14, "Code Digikey".to_string());
+
+        let mut field = HashSet::new();
+        let mut field1 = HashSet::new();
+        field.insert(Field::Extra((
+            "Note Digi".to_string(),
+            "cose varie note".to_string(),
+        )));
+        field.insert(Field::Footprint("805".to_string()));
+        field.insert(Field::Description("x5r".to_string()));
+        field.insert(Field::Category(Category::Capacitors));
+        field.insert(Field::Extra((
+            "Note Produzione".to_string(),
+            "cose varie note".to_string(),
+        )));
+        field.insert(Field::Extra((
+            "Code Farnell".to_string(),
+            "123".to_string(),
+        )));
+        field.insert(Field::Designator(vec!["C1".to_string()]));
+        field.insert(Field::Extra(("Code Digy".to_string(), "123".to_string())));
+        field.insert(Field::Comment("10nF".to_string()));
+
+        field1.insert(Field::Extra(("Code Digy".to_string(), "aa".to_string())));
+        field1.insert(Field::Comment("lm2902".to_string()));
+        field1.insert(Field::Extra((
+            "Note Produzione".to_string(),
+            "Aa-bb".to_string(),
+        )));
+        field1.insert(Field::Footprint("soic".to_string()));
+        field1.insert(Field::Description("Op-amp".to_string()));
+        field1.insert(Field::Designator(vec!["u3".to_string()]));
+        field1.insert(Field::Category(Category::IC));
+        field1.insert(Field::Extra(("Code Farnell".to_string(), "aa".to_string())));
+        field1.insert(Field::Extra(("Note Digi".to_string(), "Aa-bb".to_string())));
+
+        let bom = Bom::from_xlsx("boms/test.xlsx");
+
+        match bom {
+            Ok(bom) => {
+                for i in bom.get_items().iter() {
+                    println!("{:#?}", i.fields.len());
+                    assert_eq!(i.fields.len(), 6);
+                    // for j in i.fields.iter() {
+                    //     println!("{:#?}", j);
+                    //     //assert_eq!(j.to_string(), check_headers.get(&j.field_id()).unwrap());
+                    // }
+                }
+            }
+            Err(e) => panic!("Qui..{}", e),
+        }
+        assert!(false);
     }
 }
