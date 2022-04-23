@@ -1,10 +1,13 @@
 use axum::routing::post;
 use axum::{response::Html, routing::get, Json, Router};
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use tracing_subscriber::fmt::format;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
 use lib::bom::Bom;
+
 //use serde::{Deserialize, Serialize};
 
 // use lib::item::Item;
@@ -36,20 +39,22 @@ async fn show_form() -> Html<&'static str> {
     Html(std::include_str!("../templates/index.html"))
 }
 
-async fn merge_view_post() -> Json<Bom> {
+async fn merge_view_post() -> Json<HashMap<String, Vec<String>>> {
     //let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
     //let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
     let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/bom.xlsx");
+
+    let mut ret = HashMap::new();
     match &bom {
         Ok(bom) => {
-            println!("{:#?}", bom.get_items());
+            ret = bom.collect();
         }
-        Err(e) => panic!("Qui..{}", e),
+        Err(e) => {
+            panic!("Qui..{}", e);
+            ret.insert("error".to_string(), vec![format!("{}", e)]);
+        }
     }
-    Json(bom.unwrap())
-    //println!("{:?}", bom);
-    // Json(Input {
-    //     name: "test".to_string(),
-    //     email: "".to_string(),
-    // })
+
+    println!("{:#?}", ret);
+    Json(ret)
 }

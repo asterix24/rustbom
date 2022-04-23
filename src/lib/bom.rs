@@ -1,13 +1,16 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     path::Path,
 };
 
 use anyhow::{bail, Result};
 use calamine::{open_workbook_auto, DataType, Reader};
-use serde::{Deserialize, Serialize};
-
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 fn uppercase_first_letter(s: &str) -> String {
     let mut c = s.chars();
@@ -66,7 +69,7 @@ fn generate_uuid(item: Item) -> Result<Item> {
     let mut unique_id = "".to_string();
     let mut fields = HashSet::new();
 
-    if item.fields.len() == 0 {
+    if item.fields.is_empty() {
         bail!("No fields found");
     }
 
@@ -99,6 +102,7 @@ fn generate_uuid(item: Item) -> Result<Item> {
                     // could have different comment, so we need to replace it
                     fields.insert(Field::Comment(comment.clone()));
                     fields.insert(Field::IsMerged(true));
+                    fields.insert(Field::Category(Category::Connectors));
                 }
                 Category::Mechanicals => {
                     if footprint.to_lowercase().contains("tactile") {
@@ -112,6 +116,7 @@ fn generate_uuid(item: Item) -> Result<Item> {
                         fields.insert(Field::IsNP(false));
                         fields.insert(Field::IsMerged(false));
                     }
+                    fields.insert(Field::Category(Category::Mechanicals));
                 }
                 Category::Diode => {
                     if footprint.to_lowercase().contains("LED") {
@@ -126,6 +131,7 @@ fn generate_uuid(item: Item) -> Result<Item> {
                         fields.insert(Field::IsNP(false));
                         fields.insert(Field::IsMerged(false));
                     }
+                    fields.insert(Field::Category(Category::Diode));
                 }
                 Category::IC => {
                     if footprint.to_lowercase().contains("rele")
@@ -141,11 +147,13 @@ fn generate_uuid(item: Item) -> Result<Item> {
                         fields.insert(Field::IsNP(false));
                         fields.insert(Field::IsMerged(false));
                     }
+                    fields.insert(Field::Category(Category::IC));
                 }
-                _ => {
+                others => {
                     unique_id = format!("{}-{}-{}", description, comment, footprint);
                     fields.insert(Field::IsNP(false));
                     fields.insert(Field::IsMerged(false));
+                    fields.insert(Field::Category(others.clone()));
                 }
             },
             Field::Extra(c) => {
@@ -265,14 +273,48 @@ impl Bom {
                 fields.insert(m);
             }
         }
-        println!("**** {:?}", fields);
 
         let fields_with_uuid = generate_uuid(Item { fields })?;
+        println!("**** {:?}", fields_with_uuid);
         Ok(fields_with_uuid)
     }
 
     pub fn get_items(&self) -> &[Item] {
         &self.items
+    }
+
+    pub fn filter(&self, filter: &Category) -> Vec<Item> {
+        let mut items = Vec::new();
+
+        for i in self.items.iter() {
+            for j in &i.fields {
+                if *j == Field::Category(filter.clone()) {
+                    items.push(i.clone());
+                }
+            }
+        }
+
+        items
+    }
+
+    pub fn collect(&self) -> HashMap<String, Vec<String>> {
+        let mut map = HashMap::new();
+        for c in Category::iter() {
+            let mut items = vec![] as Vec<String>;
+            for k in self.filter(&c).iter() {
+                let mut s: String = String::new();
+                for v in &k.fields {
+                    s = format!("{};{}", s, v);
+                }
+                items.push(s);
+            }
+            if items.is_empty() {
+                continue;
+            }
+            println!("{:?}: {:#?}", c, items);
+            map.insert(format!("{:?}", c), items);
+        }
+        map
     }
 }
 
@@ -311,7 +353,7 @@ pub struct Item {
     fields: HashSet<Field>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash, EnumIter)]
 pub enum Category {
     Connectors,
     Mechanicals,
@@ -339,6 +381,23 @@ pub enum Field {
     Description(String),
     Extra((String, String)),
     Invalid(String),
+}
+
+impl Display for Field {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UniqueId(s) => write!(f, "{}", s),
+            Self::IsMerged(b) => write!(f, "{}", if *b { "Merged" } else { "" }),
+            Self::IsNP(b) => write!(f, "{}", if *b { "Not Populate" } else { "" }),
+            Self::Category(c) => write!(f, "{:?}", c),
+            Self::Designator(v) => write!(f, "{}", v.join(", ")),
+            Self::Comment(s) => write!(f, "{}", s),
+            Self::Footprint(s) => write!(f, "{}", s),
+            Self::Description(s) => write!(f, "{}", s),
+            Self::Extra((_, s)) => write!(f, "{}", s),
+            Self::Invalid(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 impl Field {
