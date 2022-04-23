@@ -283,25 +283,42 @@ impl Bom {
         &self.items
     }
 
-    pub fn filter(&self, filter: &Category) -> Vec<Item> {
+    pub fn filter(&self, filter: Field) -> Vec<Item> {
         let mut items = Vec::new();
-
         for i in self.items.iter() {
             for j in &i.fields {
-                if *j == Field::Category(filter.clone()) {
+                if *j == filter {
                     items.push(i.clone());
                 }
             }
         }
-
         items
+    }
+
+    pub fn merge(&self) -> Vec<Item> {
+        let mut merged: HashMap<Field, Item> = HashMap::new();
+        for v in &self.items {
+            for i in v.fields.iter() {
+                if let Field::UniqueId(uuid) = i {
+                    if merged.contains_key(&Field::UniqueId(uuid.clone())) {
+                        if let Err(e) = merged.get(&Field::UniqueId(uuid.clone())).unwrap().sum(v) {
+                            println!("{}", e);
+                        }
+                    } else {
+                        merged.insert(i.clone(), v.clone());
+                    }
+                }
+            }
+        }
+
+        merged.values().cloned().collect()
     }
 
     pub fn collect(&self) -> HashMap<String, Vec<String>> {
         let mut map = HashMap::new();
         for c in Category::iter() {
             let mut items = vec![] as Vec<String>;
-            for k in self.filter(&c).iter() {
+            for k in self.filter(Field::Category(c.clone())).iter() {
                 let mut s: String = String::new();
                 for v in &k.fields {
                     s = format!("{};{}", s, v);
@@ -311,7 +328,6 @@ impl Bom {
             if items.is_empty() {
                 continue;
             }
-            println!("{:?}: {:#?}", c, items);
             map.insert(format!("{:?}", c), items);
         }
         map
@@ -353,6 +369,48 @@ pub struct Item {
     fields: HashSet<Field>,
 }
 
+impl Item {
+    pub fn sum(&self, a: &Item) -> Result<Item> {
+        let mut fields = HashSet::new();
+        let mut designators: Vec<String> = vec![];
+        let mut layer: Vec<String> = vec![];
+        let mut mount: Vec<String> = vec![];
+
+        for a in a.fields.iter() {
+            match a {
+                Field::Designator(d) => {
+                    designators.append(&mut d.clone());
+                }
+                Field::Layer(d) => {
+                    layer.append(&mut d.clone());
+                }
+                Field::MountTechnology(d) => {
+                    mount.append(&mut d.clone());
+                }
+                _ => {}
+            }
+        }
+
+        for field in self.fields.iter() {
+            match field {
+                Field::Designator(d) => {
+                    designators.append(&mut d.clone());
+                }
+                Field::Layer(d) => {
+                    layer.append(&mut d.clone());
+                }
+                Field::MountTechnology(d) => {
+                    mount.append(&mut d.clone());
+                }
+                other => {
+                    fields.insert(other.clone());
+                }
+            }
+        }
+        Ok(Item { fields })
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash, EnumIter)]
 pub enum Category {
     Connectors,
@@ -379,6 +437,8 @@ pub enum Field {
     Comment(String),
     Footprint(String),
     Description(String),
+    Layer(Vec<String>),
+    MountTechnology(Vec<String>),
     Extra((String, String)),
     Invalid(String),
 }
@@ -394,6 +454,8 @@ impl Display for Field {
             Self::Comment(s) => write!(f, "{}", s),
             Self::Footprint(s) => write!(f, "{}", s),
             Self::Description(s) => write!(f, "{}", s),
+            Self::Layer(v) => write!(f, "{}", v.join(", ")),
+            Self::MountTechnology(v) => write!(f, "{}", v.join(", ")),
             Self::Extra((_, s)) => write!(f, "{}", s),
             Self::Invalid(s) => write!(f, "{}", s),
         }
