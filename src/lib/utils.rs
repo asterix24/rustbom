@@ -7,7 +7,7 @@ pub fn detect_measure_unit(comment: &str) -> String {
     }
     match RE.captures(comment.as_ref()) {
         None => String::from("unknow"),
-        Some(cc) => match cc.get(1).map_or("", |m| m.as_str()).as_ref() {
+        Some(cc) => match cc.get(1).map_or("", |m| m.as_str()) {
             "K" | "k" | "R" => String::from("ohm"),
             "C" => String::from("F"),
             "L" => String::from("H"),
@@ -36,9 +36,9 @@ pub fn value_to_eng_notation(base: f32, exp: i32, unit: &str) -> String {
 
     let mut value = format!("{}", base);
     if unit == "ohm" {
-        if value.contains(".") {
+        if value.contains('.') {
             value = match unitletter {
-                "G" | "M" | "k" => value.replace(".", unitletter),
+                "G" | "M" | "k" => value.replace('.', unitletter),
                 _ => format!("{}R", value),
             }
         } else {
@@ -51,7 +51,7 @@ pub fn value_to_eng_notation(base: f32, exp: i32, unit: &str) -> String {
     } else {
         value = format!("{}{}{}", value, unitletter, unit);
     }
-    String::from(value)
+    value
 }
 
 pub fn convert_comment_to_value(comment: &str) -> (f32, i32) {
@@ -60,7 +60,7 @@ pub fn convert_comment_to_value(comment: &str) -> (f32, i32) {
     }
 
     let v = comment
-        .split(",")
+        .split(',')
         .map(|item| item.trim())
         .collect::<Vec<_>>();
 
@@ -77,7 +77,7 @@ pub fn convert_comment_to_value(comment: &str) -> (f32, i32) {
         None => panic!("Fail to parse component value"),
         Some(cc) => {
             let left = cc.get(1).map_or("", |m| m.as_str());
-            let mult = match cc.get(2).map_or("", |m| m.as_str()).as_ref() {
+            let mult = match cc.get(2).map_or("", |m| m.as_str()) {
                 "G" => 12,
                 "M" => 6,
                 "k" | "K" => 3,
@@ -90,12 +90,11 @@ pub fn convert_comment_to_value(comment: &str) -> (f32, i32) {
             };
             let right = cc.get(3).map_or("", |m| m.as_str());
 
-            let mut together;
-            let left = left.replace(",", ".");
-            let right = if right == "" { "0" } else { right };
+            let left = left.replace(',', ".");
+            let right = if right.is_empty() { "0" } else { right };
 
-            together = format!("{}.{}", left, right);
-            if left.contains(".") {
+            let mut together = format!("{}.{}", left, right);
+            if left.contains('.') {
                 together = format!("{}{}", left, right);
             }
 
