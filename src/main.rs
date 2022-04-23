@@ -1,8 +1,7 @@
 use axum::routing::post;
 use axum::{response::Html, routing::get, Json, Router};
-use std::collections::HashMap;
 use std::net::SocketAddr;
-use tracing_subscriber::fmt::format;
+use std::vec;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
@@ -39,19 +38,22 @@ async fn show_form() -> Html<&'static str> {
     Html(std::include_str!("../templates/index.html"))
 }
 
-async fn merge_view_post() -> Json<HashMap<String, Vec<String>>> {
+async fn merge_view_post() -> Json<Vec<String>> {
     //let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
     //let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
     let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/bom.xlsx");
 
-    let mut ret = HashMap::new();
+    let mut ret: Vec<String> = vec![];
     match &bom {
         Ok(bom) => {
-            ret = bom.collect();
+            let d = bom.merge();
+            for i in d {
+                ret.push(format!("{:?}", i));
+            }
         }
         Err(e) => {
             panic!("Qui..{}", e);
-            ret.insert("error".to_string(), vec![format!("{}", e)]);
+            ret.push(format!("{}", e));
         }
     }
 

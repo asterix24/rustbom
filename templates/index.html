@@ -34,7 +34,7 @@
                 l = document.getElementById("dataList");
                 Object.entries(data).forEach(([idx, value]) => {
                     li = document.createElement("li");
-                    li.innerText = value;
+                    li.innerText = idx + ": " + value;
                     l.appendChild(li);
                 });
             });
