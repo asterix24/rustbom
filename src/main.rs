@@ -1,7 +1,6 @@
 use axum::routing::post;
 use axum::{response::Html, routing::get, Json, Router};
 use std::net::SocketAddr;
-use std::vec;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
@@ -38,25 +37,12 @@ async fn show_form() -> Html<&'static str> {
     Html(std::include_str!("../templates/index.html"))
 }
 
-async fn merge_view_post() -> Json<Vec<String>> {
+async fn merge_view_post() -> Json<Vec<Vec<String>>> {
     //let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
     //let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
-    let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/bom.xlsx");
+    let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/bomx.xlsx").unwrap();
 
-    let mut ret: Vec<String> = vec![];
-    match &bom {
-        Ok(bom) => {
-            let d = bom.merge();
-            for i in d {
-                ret.push(format!("{:?}", i));
-            }
-        }
-        Err(e) => {
-            panic!("Qui..{}", e);
-            ret.push(format!("{}", e));
-        }
-    }
-
+    let ret: Vec<Vec<String>> = bom.merge().collect();
     println!("{:#?}", ret);
     Json(ret)
 }
