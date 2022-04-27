@@ -46,132 +46,6 @@ fn is_header_key(item: &str) -> Result<String> {
     }
 }
 
-fn generate_uuid(item: Item) -> Result<Item> {
-    /*
-     * To merge items, we need to have a unique id comuted taking into account
-     * the component category and some keywords contained in the comment field.
-     * In order to avoid wrong merge, first we skip all line that are marked with
-     * NP (Not-Poupulated)
-     */
-
-    let mut category = "".to_string();
-    let mut description = "".to_string();
-    let mut comment = "".to_string();
-    let mut footprint = "".to_string();
-    let mut unique_id = "".to_string();
-    let mut fields = HashSet::new();
-    let mut qty = 0;
-
-    if item.fields.is_empty() {
-        bail!("No fields found");
-    }
-
-    for i in item.fields.iter() {
-        match i {
-            Field::Category(d) => category = format!("{:?}", d),
-            Field::Description(d) => description = d.clone(),
-            Field::Designator(d) => qty = d.len(),
-            Field::Comment(c) => comment = c.clone(),
-            Field::Footprint(f) => footprint = f.clone(),
-            _ => (),
-        }
-    }
-
-    for v in item.fields.iter() {
-        match v {
-            Field::Quantity(_) => {
-                fields.insert(Field::Quantity(qty));
-            }
-            Field::Comment(s) => {
-                if Regex::new("^NP ").unwrap().is_match(s) {
-                    fields.insert(Field::IsNP(true));
-                }
-            }
-            Field::Category(c) => match c {
-                Category::Connectors => {
-                    if Regex::new("^NP ").unwrap().is_match(comment.as_str()) {
-                        comment = "NP Connector".to_string();
-                    } else {
-                        comment = "Connector".to_string();
-                    }
-                    unique_id = format!(
-                        "{}-{}-{}-{}-connector",
-                        category, comment, footprint, description
-                    );
-
-                    // Overwrite comment, we want merge connectors, that they
-                    // could have different comment, so we need to replace it
-                    fields.insert(Field::Comment(comment.clone()));
-                    fields.insert(Field::IsMerged(true));
-                    fields.insert(Field::Category(Category::Connectors));
-                }
-                Category::Mechanicals => {
-                    if footprint.to_lowercase().contains("tactile") {
-                        unique_id = format!("{}-{}-{}-tactile", category, footprint, description);
-                        // Overwrite comment, we want merge connectors, that they
-                        // could have different comment, so we need to replace it
-                        fields.insert(Field::Comment("Tactile Switch".to_string()));
-                        fields.insert(Field::IsMerged(true));
-                    } else {
-                        unique_id =
-                            format!("{}-{}-{}-{}", category, comment, footprint, description);
-                        fields.insert(Field::IsNP(false));
-                        fields.insert(Field::IsMerged(false));
-                    }
-                    fields.insert(Field::Category(Category::Mechanicals));
-                }
-                Category::Diode => {
-                    if footprint.to_lowercase().contains("LED") {
-                        unique_id = format!("{}-{}-{}-LED", category, footprint, description);
-
-                        // Overwrite comment, we want merge connectors, that they
-                        // could have different comment, so we need to replace it
-                        fields.insert(Field::Comment("Diode LED".to_string()));
-                        fields.insert(Field::IsMerged(true));
-                    } else {
-                        unique_id =
-                            format!("{}-{}-{}-{}", category, comment, footprint, description);
-                        fields.insert(Field::IsNP(false));
-                        fields.insert(Field::IsMerged(false));
-                    }
-                    fields.insert(Field::Category(Category::Diode));
-                }
-                Category::IC => {
-                    if footprint.to_lowercase().contains("rele")
-                        || footprint.to_lowercase().contains("relay")
-                    {
-                        unique_id = format!("{}-{}-{}-relay", category, footprint, description);
-                        // Overwrite comment, we want merge connectors, that they
-                        // could have different comment, so we need to replace it
-                        fields.insert(Field::Comment("Relay, Rele\'".to_string()));
-                        fields.insert(Field::IsMerged(true));
-                    } else {
-                        unique_id =
-                            format!("{}-{}-{}-{}", category, comment, footprint, description);
-                        fields.insert(Field::IsNP(false));
-                        fields.insert(Field::IsMerged(false));
-                    }
-                    fields.insert(Field::Category(Category::IC));
-                }
-                others => {
-                    println!(".. Category: {:?}", others);
-                    unique_id = format!("{}-{}-{}-{}", category, comment, footprint, description);
-                    fields.insert(Field::IsNP(false));
-                    fields.insert(Field::IsMerged(false));
-                    fields.insert(Field::Category(others.clone()));
-                }
-            },
-            other => {
-                fields.insert(other.clone());
-            }
-        }
-    }
-    fields.insert(Field::UniqueId(unique_id));
-
-    println!("len {:?}", fields.len());
-    Ok(Item { fields })
-}
-
 fn xlsx_loader<P: AsRef<Path>>(path: P) -> (Vec<Vec<String>>, HeaderMap) {
     let mut workbook = match open_workbook_auto(path) {
         Ok(wb) => wb,
@@ -262,29 +136,19 @@ impl Bom {
     }
 
     fn parse_row(row: &[String], headers: &HeaderMap) -> Result<Item> {
-        let mut fields = Item::default();
+        let mut items = Item::default();
         for (i, field) in row.iter().enumerate() {
-            let header = match headers.get(&i) {
-                Some(h) => h,
-                None => {
-                    println!("No header for {}, skip it", i);
-                    ""
+            print!("=> {:?}", field);
+            if let Some(h) = headers.get(&i) {
+                println!(" --> {:?}", h);
+                if let Ok(m) = Field::from_header_and_value(h, field) {
+                    items.fields.insert(m);
                 }
+            } else {
+                println!("--> No header for {}, skip it", i);
             };
-
-            if let Ok(m) = Field::category_from_designator(header, field) {
-                fields.insert(m);
-            }
-
-            if let Ok(m) = Field::from_header_and_value(header, field) {
-                fields.insert(m);
-            }
         }
-
-        let mut fields_with_uuid = generate_uuid(Item { fields })?;
-        fields_with_uuid.clean();
-        println!("**** {:?}", fields_with_uuid);
-        Ok(fields_with_uuid)
+        Ok(items.guess_category().generate_uuid())
     }
 
     pub fn get_items(&self) -> &[Item] {
@@ -303,26 +167,26 @@ impl Bom {
         items
     }
 
-    pub fn merge(&self) -> Bom {
-        let mut merged: HashMap<Field, Item> = HashMap::new();
-        for v in &self.items {
-            for i in v.fields.iter() {
-                if let Field::UniqueId(uuid) = i {
-                    if merged.contains_key(&Field::UniqueId(uuid.clone())) {
-                        if let Err(e) = merged.get(&Field::UniqueId(uuid.clone())).unwrap().sum(v) {
-                            println!("{}", e);
-                        }
-                    } else {
-                        merged.insert(i.clone(), v.clone());
-                    }
-                }
-            }
-        }
+    // pub fn merge(&self) -> Bom {
+    //     let mut merged: HashMap<Field, Item> = HashMap::new();
+    //     for v in &self.items {
+    //         for i in v.fields.iter() {
+    //             if let Field::UniqueId(uuid) = i {
+    //                 if merged.contains_key(&Field::UniqueId(uuid.clone())) {
+    //                     if let Err(e) = merged.get(&Field::UniqueId(uuid.clone())).unwrap().sum(v) {
+    //                         println!("{}", e);
+    //                     }
+    //                 } else {
+    //                     merged.insert(i.clone(), v.clone());
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        Bom {
-            items: merged.values().cloned().collect(),
-        }
-    }
+    //     Bom {
+    //         items: merged.values().cloned().collect(),
+    //     }
+    // }
 
     pub fn collect(&self) -> Vec<Vec<String>> {
         let mut items: Vec<Vec<String>> = vec![];
@@ -340,123 +204,157 @@ impl Bom {
     }
 }
 
-fn guess_category<S: AsRef<str>>(designator: S) -> Result<Category> {
-    match Regex::new(r"^([a-zA-Z_]{1,3})")
-        .unwrap()
-        .captures(designator.as_ref())
-    {
-        None => Ok(Category::Invalid),
-        Some(cc) => match String::from(cc.get(1).map_or("", |m| m.as_str()))
-            .to_uppercase()
-            .as_ref()
-        {
-            "J" | "X" | "P" | "SIM" => Ok(Category::Connectors),
-            "S" | "SCR" | "SPA" | "BAT" | "BUZ" | "BT" | "B" | "SW" | "MP" | "K" => {
-                Ok(Category::Mechanicals)
-            }
-            "F" | "FU" => Ok(Category::Fuses),
-            "R" | "RN" | "R_G" => Ok(Category::Resistors),
-            "C" | "CAP" => Ok(Category::Capacitors),
-            "D" | "DZ" => Ok(Category::Diode),
-            "L" => Ok(Category::Inductors),
-            "Q" => Ok(Category::Transistor),
-            "TR" => Ok(Category::Transformers),
-            "Y" => Ok(Category::Cristal),
-            "U" => Ok(Category::IC),
-            _ => bail!("Invalid category[{:#?}]", designator.as_ref()),
-        },
-    }
-}
-
 pub type HeaderMap = HashMap<usize, String>;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Item {
+    quantity: usize,
+    unique_id: String,
+    is_merged: bool,
+    is_np: bool,
+    category: Category,
     fields: HashSet<Field>,
 }
 
 impl Item {
-    pub fn default() -> HashSet<Field> {
-        let mut fields = HashSet::new();
-        fields.insert(Field::Quantity(0));
-        fields.insert(Field::Category(Category::Invalid));
-        fields.insert(Field::Designator(vec![] as Vec<String>));
-        fields.insert(Field::Comment("".to_string()));
-        fields.insert(Field::Footprint("".to_string()));
-        fields.insert(Field::Layer(vec![] as Vec<String>));
-        fields.insert(Field::MountTechnology(vec![] as Vec<String>));
-        fields.insert(Field::Extra(("".to_string(), "".to_string())));
-
-        fields
-    }
-
-    pub fn clean(&mut self) -> Item {
-        self.fields.remove(&Field::Quantity(0));
-        self.fields.remove(&Field::Category(Category::Invalid));
-        self.fields
-            .remove(&Field::Designator(vec![] as Vec<String>));
-        self.fields.remove(&Field::Comment("".to_string()));
-        self.fields.remove(&Field::Footprint("".to_string()));
-        self.fields.remove(&Field::Layer(vec![] as Vec<String>));
-        self.fields
-            .remove(&Field::MountTechnology(vec![] as Vec<String>));
-        self.fields
-            .remove(&Field::Extra(("".to_string(), "".to_string())));
-
-        Item {
-            fields: self.fields.clone(),
+    pub fn default() -> Self {
+        let fields = HashSet::new();
+        Self {
+            quantity: 0,
+            unique_id: "".to_string(),
+            is_merged: false,
+            is_np: false,
+            category: Category::Invalid,
+            fields,
         }
     }
 
-    pub fn sum(&self, a: &Item) -> Result<Item> {
-        let mut fields = HashSet::new();
-        let mut qty: usize = 0;
-        let mut designators: Vec<String> = vec![];
-        let mut layer: Vec<String> = vec![];
-        let mut mount: Vec<String> = vec![];
+    pub fn guess_category(&mut self) -> Self {
+        let mut category: Category = Category::Invalid;
+        for i in self.fields.iter() {
+            println!("{:?}", i);
+            if let Field::Designator(d) = i {
+                let m = match d.get(0) {
+                    Some(m) => m,
+                    None => "",
+                };
 
-        for a in a.fields.iter() {
-            match a {
-                Field::Quantity(q) => {
-                    qty = *q;
+                category = match Regex::new(r"^([a-zA-Z_]{1,3})")
+                    .unwrap()
+                    .captures(m.to_lowercase().as_str())
+                {
+                    None => Category::Invalid,
+                    Some(cc) => match String::from(cc.get(1).map_or("", |m| m.as_str()))
+                        .to_uppercase()
+                        .as_ref()
+                    {
+                        "J" | "X" | "P" | "SIM" => Category::Connectors,
+                        "S" | "SCR" | "SPA" | "BAT" | "BUZ" | "BT" | "B" | "SW" | "MP" | "K" => {
+                            Category::Mechanicals
+                        }
+                        "F" | "FU" => Category::Fuses,
+                        "R" | "RN" | "R_G" => Category::Resistors,
+                        "C" | "CAP" => Category::Capacitors,
+                        "D" | "DZ" => Category::Diode,
+                        "L" => Category::Inductors,
+                        "Q" => Category::Transistor,
+                        "TR" => Category::Transformers,
+                        "Y" => Category::Cristal,
+                        "U" => Category::IC,
+                        _ => Category::Invalid,
+                    },
                 }
-                Field::Designator(d) => {
-                    designators.append(&mut d.clone());
-                }
-                Field::Layer(d) => {
-                    layer.append(&mut d.clone());
-                }
-                Field::MountTechnology(d) => {
-                    mount.append(&mut d.clone());
-                }
-                _ => {}
+            };
+        }
+        self.category = category;
+        self.clone()
+    }
+
+    fn generate_uuid(&mut self) -> Self {
+        let mut description: Field = Field::Description("".to_string());
+        let mut comment: Field = Field::Comment("".to_string());
+        let footprint: Field = Field::Footprint("".to_string());
+        self.is_merged = false;
+        self.is_np = false;
+
+        for i in self.fields.iter() {
+            match i {
+                Field::Description(d) => description = Field::Description(d.clone()),
+                Field::Designator(c) => self.quantity = c.len(),
+                Field::Comment(c) => comment = Field::Comment(c.clone()),
+                _ => (),
             }
         }
 
-        for field in self.fields.iter() {
-            match field {
-                Field::Quantity(q) => {
-                    fields.insert(Field::Quantity(qty + *q));
+        self.unique_id = format!(
+            "{:?}-{}-{}-{}",
+            self.category,
+            comment.clone(),
+            footprint,
+            description
+        );
+
+        /*
+         * To merge items, we need to have a unique id comuted taking into account
+         * the component category and some keywords contained in the comment field.
+         * In order to avoid wrong merge, first we skip all line that are marked with
+         * NP (Not-Poupulated)
+         */
+        match self.category {
+            Category::Connectors => {
+                self.fields.remove(&comment);
+                if Regex::new("^NP ")
+                    .unwrap()
+                    .is_match(comment.to_string().as_str())
+                {
+                    comment = Field::Comment("NP Connector".to_string());
+                } else {
+                    comment = Field::Comment("Connector".to_string());
                 }
-                Field::Designator(d) => {
-                    designators.append(&mut d.clone());
-                    fields.insert(Field::Designator(designators.clone()));
-                }
-                Field::Layer(d) => {
-                    layer.append(&mut d.clone());
-                    fields.insert(Field::Layer(layer.clone()));
-                }
-                Field::MountTechnology(d) => {
-                    mount.append(&mut d.clone());
-                    fields.insert(Field::MountTechnology(mount.clone()));
-                }
-                other => {
-                    fields.insert(other.clone());
+                self.unique_id = format!(
+                    "{:?}-{}-{}-{}-connector",
+                    self.category, comment, footprint, description
+                );
+                self.is_merged = true;
+                self.fields.insert(comment);
+            }
+            Category::Mechanicals => {
+                if footprint.to_string().to_lowercase().contains("tactile") {
+                    self.unique_id =
+                        format!("{:?}-{}-{}-tactile", self.category, footprint, description);
+                    self.fields.remove(&comment);
+                    self.fields
+                        .remove(&Field::Comment("Tactile Switch".to_string()));
+                    self.is_merged = true;
                 }
             }
-        }
-        Ok(Item { fields })
+            Category::Diode => {
+                if footprint.to_string().to_lowercase().contains("LED") {
+                    self.unique_id =
+                        format!("{:?}-{}-{}-LED", self.category, footprint, description);
+                    self.fields.remove(&comment);
+                    self.fields.insert(Field::Comment("Diode LED".to_string()));
+                    self.is_merged = true;
+                }
+            }
+            Category::IC => {
+                if footprint.to_string().to_lowercase().contains("rele")
+                    || footprint.to_string().to_lowercase().contains("relay")
+                {
+                    self.unique_id =
+                        format!("{:?}-{}-{}-relay", self.category, footprint, description);
+                    self.fields.remove(&comment);
+                    self.fields
+                        .insert(Field::Comment("Relay, Rele\'".to_string()));
+                    self.is_merged = true;
+                }
+            }
+            _ => {}
+        };
+
+        self.clone()
     }
+
     pub fn collect(&self) -> Vec<Field> {
         let mut items: Vec<Field> = vec![];
 
@@ -487,11 +385,6 @@ pub enum Category {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Field {
-    Quantity(usize),
-    UniqueId(String),
-    IsMerged(bool),
-    IsNP(bool),
-    Category(Category),
     Designator(Vec<String>),
     Comment(String),
     Footprint(String),
@@ -505,11 +398,6 @@ pub enum Field {
 impl Display for Field {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Quantity(q) => write!(f, "{}", q),
-            Self::UniqueId(s) => write!(f, "{}", s),
-            Self::IsMerged(b) => write!(f, "{}", if *b { "Merged" } else { "" }),
-            Self::IsNP(b) => write!(f, "{}", if *b { "Not Populate" } else { "" }),
-            Self::Category(c) => write!(f, "{:?}", c),
             Self::Designator(v) => write!(f, "{}", v.join(", ")),
             Self::Comment(s) => write!(f, "{}", s),
             Self::Footprint(s) => write!(f, "{}", s),
@@ -524,8 +412,7 @@ impl Display for Field {
 
 impl Field {
     fn from_header_and_value(header: &str, value: &str) -> Result<Field> {
-        let re_note = Regex::new(r"note\s(.*)").unwrap();
-        let re_code = Regex::new(r"code\s(.*)").unwrap();
+        let re_note = Regex::new(r"(note|code)\s(.*)").unwrap();
 
         let field: Field = match header {
             "Designator" => Field::Designator(
@@ -538,24 +425,18 @@ impl Field {
             "Comment" => Field::Comment(value.to_string()),
             "Footprint" => Field::Footprint(value.to_string()),
             "Description" => Field::Description(value.to_string()),
-            other => {
-                let mut extra = String::new();
-                if let Some(cc) = re_code.captures(other.to_lowercase().as_ref()) {
-                    if let Some(m) = cc.get(1).map(|m| m.as_str()) {
-                        extra = m.to_string();
+            "MountTechnology" => Field::MountTechnology(vec![value.to_string()]),
+            "Layer" => Field::Layer(vec![value.to_string()]),
+
+            other => match re_note.captures(other.to_lowercase().as_ref()) {
+                Some(cc) => match cc.get(0) {
+                    Some(s) => {
+                        Field::Extra((s.as_str().to_string().to_uppercase(), value.to_string()))
                     }
-                }
-                if let Some(cc) = re_note.captures(other.to_lowercase().as_ref()) {
-                    if let Some(m) = cc.get(1).map(|m| m.as_str()) {
-                        extra = m.to_string();
-                    }
-                }
-                if !extra.is_empty() {
-                    Field::Extra((other.to_string(), value.to_string()))
-                } else {
-                    Field::Invalid("-".to_string())
-                }
-            }
+                    _ => Field::Invalid("-".to_string()),
+                },
+                _ => Field::Invalid("-".to_string()),
+            },
         };
 
         if field == Field::Invalid("-".to_string()) {
@@ -565,30 +446,16 @@ impl Field {
         }
     }
 
-    fn category_from_designator(header: &str, value: &str) -> Result<Field> {
-        if header == "Designator" {
-            let category = guess_category(value)?;
-            Ok(Field::Category(category))
-        } else {
-            bail!("No valid category field {}", value);
-        }
-    }
-
     fn enum_to_usize(&self) -> usize {
         match self {
             Field::Invalid(_) => 0,
-            Field::UniqueId(_) => 1,
-            Field::IsMerged(_) => 2,
-            Field::IsNP(_) => 3,
-            Field::Category(_) => 4,
-            Field::Quantity(_) => 5,
-            Field::Designator(_) => 6,
-            Field::Comment(_) => 7,
-            Field::Footprint(_) => 8,
-            Field::Description(_) => 9,
-            Field::MountTechnology(_) => 10,
-            Field::Layer(_) => 11,
-            Field::Extra(x) => 12 + x.0.len() + x.1.len(),
+            Field::Designator(_) => 1,
+            Field::Comment(_) => 2,
+            Field::Footprint(_) => 3,
+            Field::Description(_) => 4,
+            Field::MountTechnology(_) => 5,
+            Field::Layer(_) => 6,
+            Field::Extra(x) => 7 + x.0.len() + x.1.len(),
         }
     }
 }
@@ -598,31 +465,6 @@ mod tests {
 
     use super::*;
     #[test]
-    fn test_xlsx_loader() {
-        let (_, headers) = xlsx_loader("boms/bom.xlsx");
-        let mut check_headers: HeaderMap = HashMap::new();
-
-        check_headers.insert(1, "Designator".to_string());
-        check_headers.insert(2, "Comment".to_string());
-        check_headers.insert(3, "Footprint".to_string());
-        check_headers.insert(4, "Description".to_string());
-        check_headers.insert(5, "Note Uno".to_string());
-        check_headers.insert(6, "Code Due".to_string());
-        check_headers.insert(7, "Layer".to_string());
-        check_headers.insert(8, "Mount Technology".to_string());
-        check_headers.insert(11, "Code Farnell".to_string());
-        check_headers.insert(12, "Code Mouser".to_string());
-        check_headers.insert(13, "Note Mouser".to_string());
-        check_headers.insert(14, "Code Digikey".to_string());
-
-        println!("{:#?}", check_headers);
-        println!("{:#?}", headers);
-        for i in check_headers.iter() {
-            println!("{}", i.1);
-            assert_eq!(i.1, headers.get(i.0).unwrap());
-        }
-    }
-    #[test]
     fn test_parse_row() {
         let mut check_headers: HeaderMap = HashMap::new();
 
@@ -630,12 +472,12 @@ mod tests {
         check_headers.insert(2, "Comment".to_string());
         check_headers.insert(3, "Footprint".to_string());
         check_headers.insert(4, "Description".to_string());
-        check_headers.insert(7, "Layer".to_string());
-        check_headers.insert(8, "MountTechnology".to_string());
-        check_headers.insert(11, "Code Farnell".to_string());
-        check_headers.insert(12, "Code Mouser".to_string());
-        check_headers.insert(13, "Note Mouser".to_string());
-        check_headers.insert(14, "Code Digikey".to_string());
+        check_headers.insert(5, "Layer".to_string());
+        check_headers.insert(6, "MountTechnology".to_string());
+        check_headers.insert(7, "Code Farnell".to_string());
+        check_headers.insert(8, "Code Mouser".to_string());
+        check_headers.insert(9, "Note Mouser".to_string());
+        check_headers.insert(10, "Code Digikey".to_string());
 
         /*
         "".to_string(), //"Designator"
@@ -652,6 +494,7 @@ mod tests {
 
         let rows: Vec<Vec<String>> = vec![
             vec![
+                "".to_string(),
                 "C0,C1,C2".to_string(), //"Designator"
                 "100nF".to_string(),    //"Comment"
                 "0603".to_string(),     //"Footprint"
@@ -664,6 +507,7 @@ mod tests {
                 "123-nd".to_string(),   //"Code Digikey"
             ],
             vec![
+                "".to_string(),
                 "R0,R1,R2".to_string(), //"Designator"
                 "100R".to_string(),     //"Comment"
                 "0603".to_string(),     //"Footprint"
@@ -677,34 +521,84 @@ mod tests {
             ],
         ];
 
-        let rows_checks: Vec<Vec<Field>> = vec![vec![
-            Field::Quantity(3),                    //"Designator"
-            Field::UniqueId("".to_string()),       //"Comment"
-            Field::IsMerged(false),                //"Footprint"
-            Field::IsNP(false),                    //"Description"
-            Field::Category(Category::Capacitors), //"Layer"
-            Field::Designator(vec!["C0".to_string(), "C1".to_string(), "C2".to_string()]), //"MountTechnology"
-            Field::Comment("100nF".to_string()),  //"Code Farnell"
-            Field::Footprint("0603".to_string()), //"Code Mouser"
-            Field::Description("Ceramic".to_string()), //"Note Mouser"
-            Field::Layer(vec!["Top".to_string()]), //"Code Digikey"
-            Field::MountTechnology(vec!["SMD".to_string()]), //"Code Digikey"
-            Field::Extra(("Code Farnell".to_string(), "".to_string())), //"Code Digikey"
-            Field::Extra(("Code Mouser".to_string(), "".to_string())), //"Code Digikey"
-            Field::Extra(("Note Mouser".to_string(), "".to_string())), //"Code Digikey"
-            Field::Extra(("Code Digikey".to_string(), "".to_string())), //"Code Digikey"
-        ]];
+        let mut f0 = HashSet::new();
+        f0.insert(Field::Designator(vec![
+            "C0".to_string(),
+            "C1".to_string(),
+            "C2".to_string(),
+        ]));
+        f0.insert(Field::Comment("100nF".to_string()));
+        f0.insert(Field::Footprint("0603".to_string()));
+        f0.insert(Field::Description("Ceramic".to_string()));
+        f0.insert(Field::Layer(vec!["Top".to_string()]));
+        f0.insert(Field::MountTechnology(vec!["SMD".to_string()]));
+        f0.insert(Field::Extra((
+            "CODE FARNELL".to_string(),
+            "1245".to_string(),
+        )));
+        f0.insert(Field::Extra((
+            "CODE MOUSER".to_string(),
+            "123-aa".to_string(),
+        )));
+        f0.insert(Field::Extra(("NOTE MOUSER".to_string(), "".to_string())));
+        f0.insert(Field::Extra((
+            "CODE DIGIKEY".to_string(),
+            "123-nd".to_string(),
+        )));
+
+        let mut f1 = HashSet::new();
+        f1.insert(Field::Designator(vec![
+            "R0".to_string(),
+            "R1".to_string(),
+            "R2".to_string(),
+        ]));
+        f1.insert(Field::Comment("100R".to_string()));
+        f1.insert(Field::Footprint("0603".to_string()));
+        f1.insert(Field::Description("Resistor".to_string()));
+        f1.insert(Field::Layer(vec!["Bottom".to_string()]));
+        f1.insert(Field::MountTechnology(vec!["SMD".to_string()]));
+        f1.insert(Field::Extra((
+            "CODE FARNELL".to_string(),
+            "1245".to_string(),
+        )));
+        f1.insert(Field::Extra((
+            "CODE MOUSER".to_string(),
+            "123-aa".to_string(),
+        )));
+        f1.insert(Field::Extra(("NOTE MOUSER".to_string(), "".to_string())));
+        f1.insert(Field::Extra((
+            "CODE DIGIKEY".to_string(),
+            "123-nd".to_string(),
+        )));
+
+        let rows_checks: Vec<Item> = vec![
+            Item {
+                quantity: 3,                                        //"Designator"
+                unique_id: "Capacitors-100nF--Ceramic".to_string(), //"Comment"
+                is_merged: false,                                   //"Footprint"
+                is_np: false,                                       //"Description"
+                category: Category::Capacitors,                     //"Layer"
+                fields: f0,
+            },
+            Item {
+                quantity: 3,
+                unique_id: "Resistors-100R--Resistor".to_string(),
+                is_merged: false,
+                is_np: false,
+                category: Category::Resistors,
+                fields: f1,
+            },
+        ];
 
         for (n, row) in rows.iter().enumerate() {
             if let Ok(item) = Bom::parse_row(row, &check_headers) {
-                println!("{:#?}", item.collect());
-                assert_eq!(item.fields.len(), 13);
-                for (k, i) in item.collect().iter().enumerate() {
-                    assert_eq!(i, rows_checks[n].get(k).unwrap());
-                }
+                println!(">> {:?}", rows_checks[n].fields);
+                println!("<< {:?}", item.fields);
+                assert_eq!(item.fields.len(), 10);
+                assert_eq!(item, rows_checks[n]);
             }
         }
-        assert!(false);
+        //assert!(false);
     }
     #[test]
     fn test_is_header() {
