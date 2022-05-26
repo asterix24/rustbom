@@ -3,6 +3,12 @@
 
 <head>
     <title>MergeBom Web</title>
+    <style>
+        table,
+        td {
+            border: 0.5px solid black;
+        }
+    </style>
 </head>
 
 <body>
@@ -10,13 +16,28 @@
         <h1>MergeBom Web</h1>
         <p id="error"></p>
         <form onsubmit="itemList(event)">
-            <input type="submit" value="Update" />
+            <input type="submit" value="list" />
+        </form>
+        <form onsubmit="itemListView(event)">
+            <input type="submit" value="View" />
         </form>
     </div>
     <div>
-        <p>
-        <ul id="dataList"></ul>
-        </p>
+        <table id="dataList">
+            <thead>
+                <tr>
+                    <th scope="col">Quantity</th>
+                    <th scope="col">Designator</th>
+                    <th scope="col">Comment</th>
+                    <th scope="col">Footprint</th>
+                    <th scope="col">Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                </tr>
+            </tbody>
+        </table>
     </div>
     <div id="footer">
         &copy; Copyright 2022 asterix24@gmail.com
@@ -28,17 +49,48 @@
                 method: 'POST',
                 body: "{\'field\':\'test\'}"
             });
-
             response.json().then(data => {
                 console.log(data);
-                l = document.getElementById("dataList");
+                var tbodyRef = document.getElementById('dataList').getElementsByTagName('tbody')[0];
                 Object.entries(data).forEach(([idx, value]) => {
-                    li = document.createElement("li");
-                    li.innerText = idx + ": " + value;
-                    l.appendChild(li);
+                    var newRow = tbodyRef.insertRow();
+                    for (let i = 0; i < value.length; i++) {
+                        var newCell = newRow.insertCell();
+                        newCell.innerHTML = value[i];
+                    }
                 });
             });
         }
+        async function itemListView(event) {
+            event.preventDefault();
+            const response = await fetch("/view", {
+                method: 'POST',
+                body: "{\'field\':\'test\'}"
+            });
+            response.json().then(data => {
+                console.log(data);
+                var tableRef = document.getElementById('dataList')
+                var tbodyRef = tableRef.getElementsByTagName('tbody')[0];
+                var prev_category = "";
+                Object.entries(data).forEach(([idx, value]) => {
+                    if (prev_category !== value.category) {
+                        var newRow = tbodyRef.insertRow();
+                        var newCell = newRow.insertCell();
+                        newCell.innerHTML = value.category;
+                        newCell.colSpan = value.fields.length + 1;
+                        newCell.scope = "colgroup"
+                        prev_category = value.category;
+                    }
+                    var newRow = tbodyRef.insertRow();
+                    newRow.insertCell().innerHTML = value.quantity;
+                    for (let i = 0; i < value.fields.length; i++) {
+                        var newCell = newRow.insertCell();
+                        newCell.innerHTML = value.fields[i];
+                    }
+                });
+            });
+        }
+
     </script>
 </body>
 

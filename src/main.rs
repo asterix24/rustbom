@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
-use lib::bom::Bom;
+use lib::bom::{Bom, ItemView};
 
 //use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,8 @@ async fn main() {
 
     let app: _ = Router::new()
         .route("/", get(show_form))
-        .route("/data", post(merge_view_post));
+        .route("/view", post(merge_view_post))
+        .route("/data", post(merge_post));
 
     // run it with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -37,12 +38,12 @@ async fn show_form() -> Html<&'static str> {
     Html(std::include_str!("../templates/index.html"))
 }
 
-async fn merge_view_post() -> Json<Vec<Vec<String>>> {
-    //let bom = XlsxLoader::open("/Users/asterix/src/github/mergebom-web/boms/test0.xlsx").read();
-    //let bom = Bom::from_csv("/Users/asterix/src/github/mergebom-web/boms/test.csv").unwrap();
-    let bom = Bom::from_xlsx("/Users/asterix/src/github/mergebom-web/boms/bomx.xlsx").unwrap();
+async fn merge_post() -> Json<Vec<Vec<String>>> {
+    let bom = Bom::from_csv("./boms/test.csv").unwrap();
+    Json(bom.merge().odered_vector())
+}
 
-    let ret: Vec<Vec<String>> = bom.merge().collect();
-    println!("{:#?}", ret);
-    Json(ret)
+async fn merge_view_post() -> Json<Vec<ItemView>> {
+    let bom = Bom::from_csv("./boms/test.csv").unwrap();
+    Json(bom.merge().odered_vector_view())
 }
