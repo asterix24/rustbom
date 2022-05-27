@@ -7,10 +7,12 @@ authors = ["Daniele Basile <asterix24@gmail.com>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+futures = "0.3"
 csv = "1.1"
-axum = "0.5"
+axum = { version = "0.5", features = ["multipart"] }
 ajars_axum = "0.8"
 tokio = { version = "1.0", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -22,3 +24,6 @@ calamine = "0.18"
 anyhow = "1.0"
 strum = "0.24.0"
 strum_macros = "0.24.0"
+glob = "0.3.0" 
+
+

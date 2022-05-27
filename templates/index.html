@@ -12,6 +12,9 @@
 </head>
 
 <body>
+    <div id="message">
+        <p id="error"></p>
+    </div>
     <div id="content">
         <h1>MergeBom Web</h1>
         <p id="error"></p>
@@ -21,6 +24,15 @@
         <form onsubmit="itemListView(event)">
             <input type="submit" value="View" />
         </form>
+        <form enctype="multipart/form-data" onsubmit="uploadBomFile(event)">
+            <input id="BOMfile" type="file" name="static_file" />
+            <input type="submit" value="upload" />
+        </form>
+    </div>
+    <div>
+        <p>
+        <ul id="bomlist"></ul>
+        </p>
     </div>
     <div>
         <table id="dataList">
@@ -47,7 +59,7 @@
             event.preventDefault();
             const response = await fetch("/data", {
                 method: 'POST',
-                body: "{\'field\':\'test\'}"
+                body: "{\'field\':\'test\'}",
             });
             response.json().then(data => {
                 console.log(data);
@@ -65,7 +77,11 @@
             event.preventDefault();
             const response = await fetch("/view", {
                 method: 'POST',
-                body: "{\'field\':\'test\'}"
+                body: "{\"merge_files\": [\"test.csv\"]}",
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
             });
             response.json().then(data => {
                 console.log(data);
@@ -88,6 +104,34 @@
                         newCell.innerHTML = value.fields[i];
                     }
                 });
+            });
+        }
+        async function uploadBomFile(event) {
+            event.preventDefault();
+            let formData = new FormData(event.target);
+            var fileupload = document.getElementById('BOMfile');
+            formData.append("file", fileupload.files[0]);
+            console.log(formData);
+            const response = await fetch("/upload", {
+                method: 'POST',
+                body: formData
+            });
+            response.json().then(data => {
+                console.log(data);
+                if (data.error) {
+                    document.getElementById('error').innerHTML = data.error;
+                } else {
+                    document.getElementById('error').innerHTML = "";
+                    l = document.getElementById("bomlist");
+                    l.innerHTML = "";
+                    Object.entries(data.uploaded_files).forEach(([key, value]) => {
+                        if (value !== "") {
+                            let li = document.createElement("li");
+                            li.innerText = key + ": " + value;
+                            l.appendChild(li);
+                        }
+                    });
+                }
             });
         }
 
