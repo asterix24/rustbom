@@ -99,12 +99,18 @@ async fn accept_form(mut multipart: Multipart) -> Json<ReplyStatus> {
 
     let mut uploaded_files = vec![];
     for i in ["*.csv", "*.xlsx", "*.xls"] {
-        uploaded_files.push(
-            glob(format!("{}/{}", UPLOADS_DIRECTORY, i).as_str())
-                .unwrap()
-                .map(|path| path.unwrap().to_str().unwrap().to_string())
-                .collect(),
-        );
+        let upf: Vec<String> = glob(format!("{}/{}", UPLOADS_DIRECTORY, i).as_str())
+            .unwrap()
+            .map(|path| {
+                path.unwrap()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect();
+        uploaded_files.extend(upf);
     }
 
     Json(ReplyStatus {

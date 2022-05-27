@@ -75,9 +75,20 @@
         }
         async function itemListView(event) {
             event.preventDefault();
+
+            var ul = document.getElementById("bomlist");
+            var items = ul.getElementsByTagName("li");
+            var bf = { "merge_files": [] };
+            Object.entries(items).forEach(([idx, value]) => {
+                if (value.getElementsByTagName("input")[0].checked) {
+                    console.log(value.getElementsByTagName("input")[0].value);
+                    bf["merge_files"].push(value.getElementsByTagName("input")[0].value);
+                }
+            });
+
             const response = await fetch("/view", {
                 method: 'POST',
-                body: "{\"merge_files\": [\"test.csv\"]}",
+                body: JSON.stringify(bf),
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
@@ -127,7 +138,10 @@
                     Object.entries(data.uploaded_files).forEach(([key, value]) => {
                         if (value !== "") {
                             let li = document.createElement("li");
-                            li.innerText = key + ": " + value;
+
+                            var ele = "<input type=\"checkbox\" name=\"" + value + "\" value=\"" + value + "\"><label for=\"" + value + "\">" + key + ": " + value + "</label>";
+                            li.innerHTML = ele;
+                            li.value = value;
                             l.appendChild(li);
                         }
                     });
