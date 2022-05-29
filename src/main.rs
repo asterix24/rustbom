@@ -1,8 +1,9 @@
+use askama::Template;
 use axum::{
     body::Bytes,
     extract::Multipart,
     http::StatusCode,
-    response::Html,
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     BoxError, Json, Router,
 };
@@ -15,9 +16,13 @@ use tokio_util::io::StreamReader;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
-use lib::bom::{Bom, ItemView};
+use lib::{
+    bom::{Bom, ItemView},
+    outjob::OutJobXlsx,
+};
 
 const UPLOADS_DIRECTORY: &str = "uploads";
+const MERGED_DIRECTORY: &str = "static";
 
 #[tokio::main]
 async fn main() {
@@ -32,9 +37,10 @@ async fn main() {
     //     .expect("failed to create `uploads` directory");
 
     let app: _ = Router::new()
-        .route("/", get(show_form))
+        .route("/", get(render_index))
         .route("/view", post(merge_view_post))
         .route("/data", post(merge_post))
+        .route("/jobs", post(jobs_done))
         .route("/upload", post(accept_form));
 
     // run it with hyper
@@ -46,13 +52,69 @@ async fn main() {
         .unwrap();
 }
 
-async fn show_form() -> Html<&'static str> {
-    Html(std::include_str!("../templates/index.html"))
+fn files_on_server(path: &str) -> Vec<String> {
+    let mut uploaded_files = vec![];
+    for i in ["*.csv", "*.xlsx", "*.xls"] {
+        let upf: Vec<String> = glob(Path::new(path).join(i).to_str().unwrap())
+            .unwrap()
+            .map(|path| {
+                path.unwrap()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect();
+        uploaded_files.extend(upf);
+    }
+    uploaded_files
+}
+
+#[derive(Template)]
+#[template(path = "index.html")]
+struct IndexTemplate {
+    uploaded_bom_list: Vec<String>,
+    megerd_bom_list: Vec<String>,
+}
+struct HtmlTemplate<T>(T);
+
+impl<T> IntoResponse for HtmlTemplate<T>
+where
+    T: Template,
+{
+    fn into_response(self) -> Response {
+        match self.0.render() {
+            Ok(html) => Html(html).into_response(),
+            Err(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to render template. Error: {}", err),
+            )
+                .into_response(),
+        }
+    }
+}
+
+async fn render_index() -> impl IntoResponse {
+    HtmlTemplate(IndexTemplate {
+        uploaded_bom_list: files_on_server(UPLOADS_DIRECTORY),
+        megerd_bom_list: files_on_server(MERGED_DIRECTORY),
+    })
 }
 
 async fn merge_post() -> Json<Vec<Vec<String>>> {
-    let bom = Bom::from_csv("./boms/test.csv").unwrap();
+    let bom = Bom::from_csv(&["./boms/test.csv"]).unwrap();
     Json(bom.merge().odered_vector())
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+struct JobDone {
+    merged_files: Vec<String>,
+}
+async fn jobs_done() -> Json<JobDone> {
+    Json(JobDone {
+        merged_files: files_on_server(MERGED_DIRECTORY),
+    })
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -61,14 +123,17 @@ struct MergeCfg {
 }
 
 async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<Vec<ItemView>> {
-    tracing::debug!("{:?}", payload);
+    let files: Vec<_> = payload
+        .merge_files
+        .iter()
+        .map(|f| Path::new(UPLOADS_DIRECTORY).join(f))
+        .collect();
 
-    // for i in payload.merge_files.iter() {
-    let bom =
-        Bom::from_csv(Path::new(UPLOADS_DIRECTORY).join(payload.merge_files.first().unwrap()))
-            .unwrap();
-    // }
-    Json(bom.merge().odered_vector_view())
+    let bom = Bom::from_csv(files.as_slice()).unwrap();
+    let data = bom.merge().odered_vector_view();
+    OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join("merged_bom.xlsx"))
+        .write(&["".to_string(), "".to_string(), "".to_string()], &data);
+    Json(data)
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -97,24 +162,8 @@ async fn accept_form(mut multipart: Multipart) -> Json<ReplyStatus> {
         }
     }
 
-    let mut uploaded_files = vec![];
-    for i in ["*.csv", "*.xlsx", "*.xls"] {
-        let upf: Vec<String> = glob(format!("{}/{}", UPLOADS_DIRECTORY, i).as_str())
-            .unwrap()
-            .map(|path| {
-                path.unwrap()
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-            })
-            .collect();
-        uploaded_files.extend(upf);
-    }
-
     Json(ReplyStatus {
-        uploaded_files,
+        uploaded_files: files_on_server(UPLOADS_DIRECTORY),
         error: "".to_string(),
     })
 }

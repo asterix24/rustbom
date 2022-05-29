@@ -87,14 +87,39 @@ fn xlsx_loader<P: AsRef<Path>>(path: P) -> (Vec<Vec<String>>, HeaderMap) {
     (rows, headers)
 }
 
+fn csv_loader<P: AsRef<Path>>(path: P) -> (Vec<Vec<String>>, HeaderMap) {
+    let mut rd = match csv::ReaderBuilder::new().has_headers(false).from_path(path) {
+        Ok(r) => r,
+        Err(e) => panic!("No file found {}", e),
+    };
+
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut headers: HeaderMap = HashMap::new();
+
+    for line in rd.records().flatten() {
+        let mut element = Vec::new();
+        for (i, s) in line.iter().enumerate() {
+            if let Ok(m) = is_header_key(s) {
+                headers.insert(i, m);
+            } else {
+                element.push(s.to_string());
+            }
+        }
+        if !element.is_empty() {
+            rows.push(element.clone());
+        }
+    }
+    (rows, headers)
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ItemView {
-    quantity: usize,
-    unique_id: String,
-    is_merged: bool,
-    is_np: bool,
-    category: String,
-    fields: Vec<String>,
+    pub quantity: usize,
+    pub unique_id: String,
+    pub is_merged: bool,
+    pub is_np: bool,
+    pub category: String,
+    pub fields: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -115,44 +140,38 @@ impl PartialOrd for Field {
 }
 
 impl Bom {
-    pub fn from_csv<P: AsRef<Path>>(path: P) -> Result<Bom> {
-        let mut rd = csv::ReaderBuilder::new()
-            .has_headers(false)
-            .from_path(path)?;
-
-        let mut rows: Vec<Vec<String>> = Vec::new();
-        let mut headers: HeaderMap = HashMap::new();
-
-        for line in rd.records().flatten() {
-            let mut element = Vec::new();
-            for (i, s) in line.iter().enumerate() {
-                if let Ok(m) = is_header_key(s) {
-                    headers.insert(i, m);
-                } else {
-                    element.push(s.to_string());
-                }
-            }
-            if !element.is_empty() {
-                rows.push(element.clone());
+    pub fn from_csv<P: AsRef<Path>>(path: &[P]) -> Result<Bom> {
+        let mut items: Vec<_> = Vec::new();
+        for i in path.iter() {
+            println!("{:?}", i.as_ref());
+            let (rows, headers) = csv_loader(i.as_ref());
+            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers) {
+                items.append(&mut ii);
             }
         }
-
-        Bom::from_rows_and_headers(&rows, &headers)
+        Ok(Bom { items })
     }
 
-    pub fn from_xlsx<P: AsRef<Path>>(path: P) -> Result<Bom> {
-        let (rows, headers) = xlsx_loader(path);
-        Bom::from_rows_and_headers(&rows, &headers)
+    pub fn from_xlsx<P: AsRef<Path>>(path: &[P]) -> Result<Bom> {
+        let mut items: Vec<_> = Vec::new();
+        for i in path.iter() {
+            println!("{:?}", i.as_ref());
+            let (rows, headers) = xlsx_loader(i);
+            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers) {
+                items.append(&mut ii);
+            }
+        }
+        Ok(Bom { items })
     }
 
-    fn from_rows_and_headers(rows: &[Vec<String>], headers: &HeaderMap) -> Result<Bom> {
+    fn from_rows_and_headers(rows: &[Vec<String>], headers: &HeaderMap) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
         for row in rows.iter() {
             if let Ok(item) = Self::parse_row(row, headers) {
                 items.push(item);
             }
         }
-        Ok(Bom { items })
+        Ok(items)
     }
 
     fn parse_row(row: &[String], headers: &HeaderMap) -> Result<Item> {
@@ -165,7 +184,7 @@ impl Bom {
                     items.fields.insert(m);
                 }
             } else {
-                println!("--> No header for {}, skip it", i);
+                println!("--> No header {} for {}, skip it", i, field);
             };
         }
         Ok(items.guess_category().generate_uuid())
@@ -239,7 +258,6 @@ impl Bom {
 
     pub fn odered_vector_view(&mut self) -> Vec<ItemView> {
         let mut items: Vec<ItemView> = vec![];
-
         self.items.sort_by(|a, b| b.category.cmp(&a.category));
         for item in self.items.iter() {
             let mut m: ItemView = ItemView::default();
@@ -549,7 +567,7 @@ impl Field {
         }
     }
 
-    fn enum_to_usize(&self) -> usize {
+    pub fn enum_to_usize(&self) -> usize {
         match self {
             Field::Invalid(_) => 0,
             Field::Designator(_) => 1,

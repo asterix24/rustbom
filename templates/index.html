@@ -30,9 +30,30 @@
         </form>
     </div>
     <div>
-        <p>
-        <ul id="bomlist"></ul>
-        </p>
+        <table>
+            <tr>
+                <td>
+                    <ul id="bomlist">
+                        {% for item in uploaded_bom_list %}
+                        <li>
+                            <input type="checkbox" name="{{item}}" value="{{item}}"><label
+                                for="{{item}}">{{loop.index}}:{{item}}</label>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </td>
+                <td>
+                    <ul id="mergedbomlist">
+                        {% for item in megerd_bom_list %}
+                        <li>
+                            <input type="checkbox" name="{{item}}" value="{{item}}"><label
+                                for="{{item}}">{{loop.index}}:{{item}}</label>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </td>
+            </tr>
+        </table>
     </div>
     <div>
         <table id="dataList">
@@ -116,6 +137,30 @@
                     }
                 });
             });
+            mergedBomFile();
+        }
+        async function mergedBomFile() {
+            const response = await fetch("/jobs", {
+                method: 'POST',
+                body: JSON.stringify({ "merge_files": [] }),
+            });
+            response.json().then(data => {
+                console.log(data);
+                if (data.error) {
+                    document.getElementById('error').innerHTML = data.error;
+                } else {
+                    document.getElementById('error').innerHTML = "";
+                    l = document.getElementById("mergedbomlist");
+                    l.innerHTML = "";
+                    Object.entries(data.merged_files).forEach(([key, value]) => {
+                        if (value !== "") {
+                            let li = document.createElement("li");
+                            li.innerHTML = "<a href=\"static/" + value + "\">" + key + ": " + value + "</a>";
+                            l.appendChild(li);
+                        }
+                    });
+                }
+            });
         }
         async function uploadBomFile(event) {
             event.preventDefault();
@@ -148,7 +193,6 @@
                 }
             });
         }
-
     </script>
 </body>
 
