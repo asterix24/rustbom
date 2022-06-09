@@ -21,8 +21,9 @@ use lib::{
     outjob::OutJobXlsx,
 };
 
-const UPLOADS_DIRECTORY: &str = "uploads";
-const MERGED_DIRECTORY: &str = "static";
+const STATIC_DIRECTORY: &str = "static";
+const UPLOADS_DIRECTORY: &str = "static/uploads";
+const MERGED_DIRECTORY: &str = "static/merged";
 
 #[tokio::main]
 async fn main() {
@@ -32,19 +33,19 @@ async fn main() {
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
-    // tokio::fs::create_dir(UPLOADS_DIRECTORY)
-    //     .await
-    //     .expect("failed to create `uploads` directory");
 
     let app: _ = Router::new()
         .route("/", get(render_index))
         .route("/view", post(merge_view_post))
-        .route("/data", post(merge_post))
         .route("/jobs", post(jobs_done))
-        .route("/upload", post(accept_form));
+        .route("/upload", post(accept_form))
+        .merge(axum_extra::routing::SpaRouter::new(
+            "/static",
+            STATIC_DIRECTORY,
+        ));
 
     // run it with hyper
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -74,6 +75,9 @@ fn files_on_server(path: &str) -> Vec<String> {
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
+    static_dir: String,
+    merge_dir: String,
+    upload_dir: String,
     uploaded_bom_list: Vec<String>,
     megerd_bom_list: Vec<String>,
 }
@@ -97,14 +101,12 @@ where
 
 async fn render_index() -> impl IntoResponse {
     HtmlTemplate(IndexTemplate {
+        static_dir: STATIC_DIRECTORY.to_string(),
+        merge_dir: MERGED_DIRECTORY.to_string(),
+        upload_dir: UPLOADS_DIRECTORY.to_string(),
         uploaded_bom_list: files_on_server(UPLOADS_DIRECTORY),
         megerd_bom_list: files_on_server(MERGED_DIRECTORY),
     })
-}
-
-async fn merge_post() -> Json<Vec<Vec<String>>> {
-    let bom = Bom::from_csv(&["./boms/test.csv"]).unwrap();
-    Json(bom.merge().odered_vector())
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]

@@ -18,9 +18,6 @@
     <div id="content">
         <h1>MergeBom Web</h1>
         <p id="error"></p>
-        <form onsubmit="itemList(event)">
-            <input type="submit" value="list" />
-        </form>
         <form onsubmit="itemListView(event)">
             <input type="submit" value="View" />
         </form>
@@ -31,6 +28,10 @@
     </div>
     <div>
         <table>
+            <tr>
+                <th>Uploaded BOM files</th>
+                <th>Merged BOM files</th>
+            </tr>
             <tr>
                 <td>
                     <ul id="bomlist">
@@ -46,8 +47,7 @@
                     <ul id="mergedbomlist">
                         {% for item in megerd_bom_list %}
                         <li>
-                            <input type="checkbox" name="{{item}}" value="{{item}}"><label
-                                for="{{item}}">{{loop.index}}:{{item}}</label>
+                            <a href="/{{merge_dir}}/{{item}}" download="{{item}}">{{loop.index}}:{{item}}</a>
                         </li>
                         {% endfor %}
                     </ul>
@@ -55,6 +55,9 @@
             </tr>
         </table>
     </div>
+    <br>
+    <hr>
+    <br>
     <div>
         <table id="dataList">
             <thead>
@@ -72,28 +75,14 @@
             </tbody>
         </table>
     </div>
+    <br>
+    <hr>
+    <br>
     <div id="footer">
         &copy; Copyright 2022 asterix24@gmail.com
     </div>
     <script>
-        async function itemList(event) {
-            event.preventDefault();
-            const response = await fetch("/data", {
-                method: 'POST',
-                body: "{\'field\':\'test\'}",
-            });
-            response.json().then(data => {
-                console.log(data);
-                var tbodyRef = document.getElementById('dataList').getElementsByTagName('tbody')[0];
-                Object.entries(data).forEach(([idx, value]) => {
-                    var newRow = tbodyRef.insertRow();
-                    for (let i = 0; i < value.length; i++) {
-                        var newCell = newRow.insertCell();
-                        newCell.innerHTML = value[i];
-                    }
-                });
-            });
-        }
+
         async function itemListView(event) {
             event.preventDefault();
 
@@ -155,7 +144,7 @@
                     Object.entries(data.merged_files).forEach(([key, value]) => {
                         if (value !== "") {
                             let li = document.createElement("li");
-                            li.innerHTML = "<a href=\"static/" + value + "\">" + key + ": " + value + "</a>";
+                            li.innerHTML = "<a href=\"/{{merge_dir}}/" + value + " \"download=\"" + value + "\">" + key + ": " + value + "</a>";
                             l.appendChild(li);
                         }
                     });
