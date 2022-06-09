@@ -19,13 +19,16 @@
         <h1>MergeBom Web</h1>
         <p id="error"></p>
         <form onsubmit="itemListView(event)">
-            <input type="submit" value="View" />
+            <label for="mergedFileName">Merged file name:</label>
+            <input type="text" id="mergedFileName" name="merged_bom.xlsx">
+            <input type="submit" value="merge" />
         </form>
         <form enctype="multipart/form-data" onsubmit="uploadBomFile(event)">
             <input id="BOMfile" type="file" name="static_file" />
             <input type="submit" value="upload" />
         </form>
     </div>
+    <br><br>
     <div>
         <table>
             <tr>
@@ -88,7 +91,8 @@
 
             var ul = document.getElementById("bomlist");
             var items = ul.getElementsByTagName("li");
-            var bf = { "merge_files": [] };
+            var bf = { "merge_files": [], "merge_file_name": document.getElementById("mergedFileName") };
+
             Object.entries(items).forEach(([idx, value]) => {
                 if (value.getElementsByTagName("input")[0].checked) {
                     console.log(value.getElementsByTagName("input")[0].value);

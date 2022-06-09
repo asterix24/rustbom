@@ -121,6 +121,7 @@ async fn jobs_done() -> Json<JobDone> {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 struct MergeCfg {
+    merge_file_name: String,
     merge_files: Vec<String>,
 }
 
@@ -131,9 +132,14 @@ async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<Vec<ItemView>> {
         .map(|f| Path::new(UPLOADS_DIRECTORY).join(f))
         .collect();
 
+    let mut file_name = "merged_bom.xlsx".to_string();
+    if !payload.merge_file_name.is_empty() {
+        file_name = payload.merge_file_name;
+    }
+
     let bom = Bom::from_csv(files.as_slice()).unwrap();
     let data = bom.merge().odered_vector_view();
-    OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join("merged_bom.xlsx"))
+    OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join(file_name))
         .write(&["".to_string(), "".to_string(), "".to_string()], &data);
     Json(data)
 }
