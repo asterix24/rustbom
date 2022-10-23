@@ -91,7 +91,7 @@
 
             var ul = document.getElementById("bomlist");
             var items = ul.getElementsByTagName("li");
-            var bf = { "merge_files": [], "merge_file_name": document.getElementById("mergedFileName") };
+            var bf = { "merge_files": [], "merge_file_name": document.getElementById("mergedFileName").value };
 
             Object.entries(items).forEach(([idx, value]) => {
                 if (value.getElementsByTagName("input")[0].checked) {
@@ -100,6 +100,7 @@
                 }
             });
 
+            console.log(bf);
             const response = await fetch("/view", {
                 method: 'POST',
                 body: JSON.stringify(bf),
@@ -113,7 +114,7 @@
                 var tableRef = document.getElementById('dataList')
                 var tbodyRef = tableRef.getElementsByTagName('tbody')[0];
                 var prev_category = "";
-                Object.entries(data).forEach(([idx, value]) => {
+                Object.entries(data.rows).forEach(([idx, value]) => {
                     if (prev_category !== value.category) {
                         var newRow = tbodyRef.insertRow();
                         var newCell = newRow.insertCell();
@@ -176,7 +177,6 @@
                     Object.entries(data.uploaded_files).forEach(([key, value]) => {
                         if (value !== "") {
                             let li = document.createElement("li");
-
                             var ele = "<input type=\"checkbox\" name=\"" + value + "\" value=\"" + value + "\"><label for=\"" + value + "\">" + key + ": " + value + "</label>";
                             li.innerHTML = ele;
                             li.value = value;

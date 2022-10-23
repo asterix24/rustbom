@@ -17,7 +17,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod lib;
 use lib::{
-    bom::{Bom, ItemView},
+    bom::{Bom, ItemsTable},
     outjob::OutJobXlsx,
 };
 
@@ -125,7 +125,7 @@ struct MergeCfg {
     merge_files: Vec<String>,
 }
 
-async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<Vec<ItemView>> {
+async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<ItemsTable> {
     let files: Vec<_> = payload
         .merge_files
         .iter()
@@ -138,9 +138,8 @@ async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<Vec<ItemView>> {
     }
 
     let bom = Bom::from_csv(files.as_slice()).unwrap();
-    let data = bom.merge().odered_vector_view();
-    OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join(file_name))
-        .write(&["".to_string(), "".to_string(), "".to_string()], &data);
+    let data = bom.merge().odered_vector_table();
+    OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join(file_name)).write(&data);
     Json(data)
 }
 
@@ -176,7 +175,6 @@ async fn accept_form(mut multipart: Multipart) -> Json<ReplyStatus> {
     })
 }
 
-// Save a `Stream` to a file
 async fn stream_to_file<S, E>(path: &str, stream: S) -> Result<(), (StatusCode, String)>
 where
     S: Stream<Item = Result<Bytes, E>>,

@@ -123,6 +123,28 @@ pub struct ItemView {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct ItemsTable {
+    pub headers: Vec<String>,
+    pub rows: Vec<ItemView>,
+}
+
+impl Default for ItemsTable {
+    fn default() -> Self {
+        ItemsTable {
+            headers: vec![
+                "Designator".to_string(),
+                "Comment".to_string(),
+                "Footprint".to_string(),
+                "Description".to_string(),
+                "Layer".to_string(),
+                "MountTechnology".to_string(),
+            ],
+            rows: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Bom {
     items: Vec<Item>,
 }
@@ -256,23 +278,29 @@ impl Bom {
         items
     }
 
-    pub fn odered_vector_view(&mut self) -> Vec<ItemView> {
-        let mut items: Vec<ItemView> = vec![];
+    pub fn odered_vector_table(&mut self) -> ItemsTable {
+        let mut items_table: ItemsTable = ItemsTable::default();
         self.items.sort_by(|a, b| b.category.cmp(&a.category));
         for item in self.items.iter() {
-            let mut m: ItemView = ItemView::default();
-            m.category = format!("{}", item.category);
-            m.is_merged = item.is_merged;
-            m.is_np = item.is_np;
-            m.quantity = item.quantity;
             let mut d = item.fields.clone().into_iter().collect::<Vec<Field>>();
             d.sort();
-            for field in d.iter() {
-                m.fields.push(field.to_string());
-            }
-            items.push(m.clone());
+            // for i in d.iter() {
+            //     match i {
+            //         Field::&Extra(d) => {
+            //             items_table.designators.push(d.clone());
+            //         }
+            //     }
+            // }
+            items_table.rows.push(ItemView {
+                quantity: item.quantity,
+                unique_id: item.unique_id.clone(),
+                category: format!("{}", item.category),
+                is_merged: item.is_merged,
+                is_np: item.is_np,
+                fields: d.iter().map(|f| f.to_string()).collect(),
+            });
         }
-        items
+        items_table
     }
 }
 
@@ -425,17 +453,6 @@ impl Item {
         };
 
         self.clone()
-    }
-
-    pub fn collect(&self) -> Vec<Field> {
-        let mut items: Vec<Field> = vec![];
-
-        for i in self.fields.iter() {
-            items.push(i.clone());
-        }
-
-        items.sort();
-        items
     }
 }
 

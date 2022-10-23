@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::bom::ItemView;
+use super::bom::ItemsTable;
 use xlsxwriter::*;
 
 pub struct OutJobXlsx {
@@ -15,7 +15,7 @@ impl OutJobXlsx {
             curr_row: 0,
         }
     }
-    pub fn write(mut self, headers: &[String], data: &[ItemView]) {
+    pub fn write(mut self, data: &ItemsTable) {
         let fmt_defalt = self
             .wk
             .add_format()
@@ -52,7 +52,7 @@ impl OutJobXlsx {
             .write_string(self.curr_row, column, "Qty", Some(&fmt_qty))
             .unwrap();
         column += 1;
-        for hdr in headers.iter() {
+        for hdr in data.headers.iter() {
             sheet
                 .write_string(self.curr_row, column, hdr, Some(&fmt_header))
                 .unwrap();
@@ -60,14 +60,14 @@ impl OutJobXlsx {
         }
         self.curr_row += 1;
         let mut curr_header = "".to_string();
-        for i in data.iter() {
+        for i in data.rows.iter() {
             if curr_header != i.category {
                 sheet
                     .merge_range(
                         self.curr_row,
                         0,
                         self.curr_row,
-                        headers.len() as u16,
+                        data.headers.len() as u16,
                         i.category.as_str(),
                         Some(&fmt_category),
                     )
