@@ -1,6 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    ffi::OsStr,
     fmt,
     path::Path,
     vec,
@@ -162,28 +163,59 @@ impl PartialOrd for Field {
 }
 
 impl Bom {
-    pub fn from_csv<P: AsRef<Path>>(path: &[P]) -> Result<Bom> {
+    pub fn loader<P: AsRef<Path>>(path: &[P]) -> Bom {
+        let mut it1: Vec<Item> = match Bom::from_csv(path) {
+            Ok(b) => b,
+            Err(_) => Vec::new(),
+        };
+
+        let it2: Vec<Item> = match Bom::from_xlsx(path) {
+            Ok(b) => b,
+            Err(_) => Vec::new(),
+        };
+
+        it1.extend(it2);
+        Bom { items: it1 }
+    }
+
+    pub fn from_csv<P: AsRef<Path>>(path: &[P]) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
         for i in path.iter() {
+            let ext = Path::new(i.as_ref())
+                .extension()
+                .and_then(OsStr::to_str)
+                .unwrap();
             println!("{:?}", i.as_ref());
+            if ext != "csv" {
+                println!("{:?} {:?} != csv: skip..", i.as_ref(), ext);
+                continue;
+            }
             let (rows, headers) = csv_loader(i.as_ref());
             if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers) {
                 items.append(&mut ii);
             }
         }
-        Ok(Bom { items })
+        Ok(items)
     }
 
-    pub fn from_xlsx<P: AsRef<Path>>(path: &[P]) -> Result<Bom> {
+    pub fn from_xlsx<P: AsRef<Path>>(path: &[P]) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
         for i in path.iter() {
+            let ext = Path::new(i.as_ref())
+                .extension()
+                .and_then(OsStr::to_str)
+                .unwrap();
             println!("{:?}", i.as_ref());
+            if ext != "xlsx" && ext != "xls" {
+                println!("{:?} {:?} != xlsx xls: skip..", i.as_ref(), ext);
+                continue;
+            }
             let (rows, headers) = xlsx_loader(i);
             if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers) {
                 items.append(&mut ii);
             }
         }
-        Ok(Bom { items })
+        Ok(items)
     }
 
     fn from_rows_and_headers(rows: &[Vec<String>], headers: &HeaderMap) -> Result<Vec<Item>> {

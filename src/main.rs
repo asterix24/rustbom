@@ -137,7 +137,7 @@ async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<ItemsTable> {
         file_name = payload.merge_file_name;
     }
 
-    let bom = Bom::from_csv(files.as_slice()).unwrap();
+    let bom = Bom::loader(files.as_slice());
     let data = bom.merge().odered_vector_table();
     OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join(file_name)).write(&data);
     Json(data)
@@ -206,7 +206,7 @@ where
 // to prevent directory traversal attacks we ensure the path conists of exactly one normal
 // component
 fn path_is_valid(path: &str) -> bool {
-    let path = std::path::Path::new(&*path);
+    let path = std::path::Path::new(path);
     let mut components = path.components().peekable();
 
     if let Some(first) = components.peek() {
