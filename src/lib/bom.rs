@@ -38,7 +38,10 @@ fn is_header_key(item: &str) -> Result<String> {
             let res: String;
             match re_note.captures(item.to_lowercase().as_ref()) {
                 Some(cc) => match cc.get(0) {
-                    Some(s) => res = s.as_str().to_string().to_uppercase(),
+                    Some(s) => {
+                        res = s.as_str().to_string().to_uppercase();
+                        println!("hdr> {:?}", res);
+                    }
                     _ => bail!("Invalid header key: {}", item),
                 },
                 _ => bail!("Invalid header key: {}", item),
@@ -316,13 +319,11 @@ impl Bom {
         for item in self.items.iter() {
             let mut d = item.fields.clone().into_iter().collect::<Vec<Field>>();
             d.sort();
-            // for i in d.iter() {
-            //     match i {
-            //         Field::&Extra(d) => {
-            //             items_table.designators.push(d.clone());
-            //         }
-            //     }
-            // }
+            for i in d.iter() {
+                if let Field::Extra(_) = i {
+                    println!(":> {:?}", i);
+                }
+            }
             items_table.rows.push(ItemView {
                 quantity: item.quantity,
                 unique_id: item.unique_id.clone(),
@@ -346,6 +347,7 @@ pub struct Item {
     is_np: bool,
     pub category: Category,
     fields: HashSet<Field>,
+    //extra: HashMap<>
 }
 
 impl Item {
