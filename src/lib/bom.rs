@@ -23,7 +23,7 @@ fn is_header_key(item: &str) -> Result<String> {
             //println!("Standard: {}", item);
             Ok(uppercase_first_letter(item))
         }
-        "mounttechnology" | "mount_technology" | "MountTechnology" => {
+        "mounttechnology" | "mount_technology" => {
             //println!("Standard: {}", item);
             Ok("MountTechnology".to_string())
         }
@@ -129,6 +129,7 @@ impl Default for ItemsTable {
     fn default() -> Self {
         ItemsTable {
             headers: vec![
+                "Quantity".to_string(),
                 "Designator".to_string(),
                 "Comment".to_string(),
                 "Footprint".to_string(),
@@ -233,7 +234,7 @@ impl Bom {
         for (i, field) in row.iter().enumerate() {
             //print!("=> {:?}", field);
             if let Some(h) = headers.get(&i) {
-                //println!(" --> {:?}", h);
+                //println!("parse_row --> {:?}", h);
                 if let Ok(m) = Field::from_header_and_value(h, field) {
                     if !items.fields.contains(&m) {
                         items.fields.push(m);
@@ -337,8 +338,26 @@ impl Bom {
         for item in self.items.iter() {
             let mut d = item.fields.clone().into_iter().collect::<Vec<Field>>();
             d.sort();
+
             let m: Vec<String> = d.iter().map(|f| f.to_string()).collect();
             println!("{:?}", m);
+
+            for f in d.iter() {
+                if let Field::Note(d) = f {
+                    if !items_table.headers.contains(&d.hdr) {
+                        // items_table.headers.push(format!("Note {}", d.hdr));
+                        items_table.headers.push(d.hdr.clone());
+                    }
+                }
+                if let Field::Code(d) = f {
+                    if !items_table.headers.contains(&d.hdr) {
+                        //items_table.headers.push(format!("Code {}", d.hdr));
+                        items_table.headers.push(d.hdr.clone());
+                    }
+                }
+            }
+            println!("{:?}", items_table.headers);
+
             items_table.rows.push(ItemView {
                 quantity: item.quantity,
                 unique_id: item.unique_id.clone(),
@@ -570,6 +589,20 @@ impl PartialOrd for Category {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExtraCell {
+    hdr: String,
+    value: String,
+}
+impl Default for ExtraCell {
+    fn default() -> Self {
+        ExtraCell {
+            hdr: "ExtraCell".to_string(),
+            value: "".to_string(),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Field {
     Designator(Vec<String>),
     Comment(String),
@@ -578,8 +611,8 @@ pub enum Field {
     Layer(Vec<String>),
     MountTechnology(Vec<String>),
     Invalid(String),
-    Note(String),
-    Code(String),
+    Note(ExtraCell),
+    Code(ExtraCell),
 }
 
 impl Display for Field {
@@ -591,8 +624,8 @@ impl Display for Field {
             Self::Description(s) => write!(f, "{}", s),
             Self::Layer(v) => write!(f, "{}", v.join(", ")),
             Self::MountTechnology(v) => write!(f, "{}", v.join(", ")),
-            Self::Code(s) => write!(f, "{}", s),
-            Self::Note(s) => write!(f, "{}", s),
+            Self::Code(s) => write!(f, "{}", s.value),
+            Self::Note(s) => write!(f, "{}", s.value),
             Self::Invalid(s) => write!(f, "{}", s),
         }
     }
@@ -600,32 +633,38 @@ impl Display for Field {
 
 impl Field {
     fn from_header_and_value(header: &str, value: &str) -> Result<Field> {
-        let field: Field = match header {
-            "Designator" => Field::Designator(
+        let field: Field = match header.to_lowercase().as_str() {
+            "designator" => Field::Designator(
                 value
                     .to_string()
                     .split(',')
                     .map(|m| m.trim().to_string())
                     .collect(),
             ),
-            "Comment" => Field::Comment(value.to_string()),
-            "Footprint" => Field::Footprint(value.to_string()),
-            "Description" => Field::Description(value.to_string()),
-            "MountTechnology" => Field::MountTechnology(vec![value.to_string()]),
-            "Layer" => Field::Layer(vec![value.to_string()]),
+            "comment" => Field::Comment(value.to_string()),
+            "footprint" => Field::Footprint(value.to_string()),
+            "description" => Field::Description(value.to_string()),
+            "mounttechnology" => Field::MountTechnology(vec![value.to_string()]),
+            "layer" => Field::Layer(vec![value.to_string()]),
             other => match Regex::new(r"code\s(.*)").unwrap().captures(other) {
                 Some(cc) => match cc.get(0) {
-                    Some(_) => {
-                        println!("{:?} > {:?}", other, value);
-                        Field::Code(value.to_string().to_uppercase())
+                    Some(s) => {
+                        println!("from_header_and_value: {:?} > {:?}", s, value);
+                        Field::Code(ExtraCell {
+                            hdr: s.as_str().to_string(),
+                            value: value.to_string().to_uppercase(),
+                        })
                     }
                     _ => Field::Invalid(value.to_string()),
                 },
                 _ => match Regex::new(r"note\s(.*)").unwrap().captures(other) {
                     Some(cc) => match cc.get(0) {
-                        Some(_) => {
-                            println!("{:?} > {:?}", other, value);
-                            Field::Note(value.to_string().to_uppercase())
+                        Some(s) => {
+                            println!("from_header_and_value: {:?} > {:?}", s, value);
+                            Field::Note(ExtraCell {
+                                hdr: s.as_str().to_string(),
+                                value: value.to_string().to_uppercase(),
+                            })
                         }
                         _ => Field::Invalid(value.to_string()),
                     },

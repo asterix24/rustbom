@@ -64,17 +64,8 @@
     <div>
         <table id="dataList">
             <thead>
-                <tr>
-                    <th scope="col">Quantity</th>
-                    <th scope="col">Designator</th>
-                    <th scope="col">Comment</th>
-                    <th scope="col">Footprint</th>
-                    <th scope="col">Description</th>
-                </tr>
             </thead>
             <tbody>
-                <tr>
-                </tr>
             </tbody>
         </table>
     </div>
@@ -112,6 +103,13 @@
             response.json().then(data => {
                 console.log(data);
                 var tableRef = document.getElementById('dataList')
+                var theadRef = tableRef.getElementsByTagName('thead')[0];
+                var newRow = theadRef.insertRow();
+                Object.entries(data.headers).forEach(([idx, value]) => {
+                    var headerCell = document.createElement("th");
+                    headerCell.innerHTML = value;
+                    newRow.appendChild(headerCell);
+                });
                 var tbodyRef = tableRef.getElementsByTagName('tbody')[0];
                 var prev_category = "";
                 Object.entries(data.rows).forEach(([idx, value]) => {
