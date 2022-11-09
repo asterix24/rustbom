@@ -33,7 +33,6 @@ fn is_header_key(item: &str) -> Result<String> {
                 Some(cc) => match cc.get(0) {
                     Some(s) => {
                         res = s.as_str().to_string().to_uppercase();
-                        println!("hdr> {:?}", res);
                     }
                     _ => bail!("Invalid header key: {}", item),
                 },
@@ -266,8 +265,6 @@ impl Bom {
         - if NP, skip it
         - designators was put all togheter in vector
         - quantity is was increased
-
-
         */
         let mut merged = HashMap::new();
 
@@ -344,15 +341,15 @@ impl Bom {
 
             for f in d.iter() {
                 if let Field::Note(d) = f {
-                    if !items_table.headers.contains(&d.hdr) {
-                        // items_table.headers.push(format!("Note {}", d.hdr));
-                        items_table.headers.push(d.hdr.clone());
+                    let note = format!("Note {}", d.hdr);
+                    if !items_table.headers.contains(&note) {
+                        items_table.headers.push(note);
                     }
                 }
                 if let Field::Code(d) = f {
-                    if !items_table.headers.contains(&d.hdr) {
-                        //items_table.headers.push(format!("Code {}", d.hdr));
-                        items_table.headers.push(d.hdr.clone());
+                    let code = format!("Code {}", d.hdr);
+                    if !items_table.headers.contains(&code) {
+                        items_table.headers.push(code);
                     }
                 }
             }
@@ -647,7 +644,7 @@ impl Field {
             "mounttechnology" => Field::MountTechnology(vec![value.to_string()]),
             "layer" => Field::Layer(vec![value.to_string()]),
             other => match Regex::new(r"code\s(.*)").unwrap().captures(other) {
-                Some(cc) => match cc.get(0) {
+                Some(cc) => match cc.get(1) {
                     Some(s) => {
                         println!("from_header_and_value: {:?} > {:?}", s, value);
                         Field::Code(ExtraCell {
@@ -658,7 +655,7 @@ impl Field {
                     _ => Field::Invalid(value.to_string()),
                 },
                 _ => match Regex::new(r"note\s(.*)").unwrap().captures(other) {
-                    Some(cc) => match cc.get(0) {
+                    Some(cc) => match cc.get(1) {
                         Some(s) => {
                             println!("from_header_and_value: {:?} > {:?}", s, value);
                             Field::Note(ExtraCell {
