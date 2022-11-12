@@ -247,58 +247,40 @@ impl Bom {
         Ok(items.guess_category().generate_uuid())
     }
 
-    pub fn filter(&self, filter: Field) -> Vec<Item> {
-        let mut items = Vec::new();
-        for i in self.items.iter() {
-            for j in &i.fields {
-                if *j == filter {
-                    items.push(i.clone());
-                }
-            }
-        }
-        items
-    }
-
     pub fn merge(&self) -> Bom {
         /* Merge policy:
         All Item element was merged by unique_id, if two row have same unique_id we could merge it in one, but:
         - if NP, skip it
-        - designators was put all togheter in vector
-        - quantity is was increased
+        - designators is put all togheter in vector
+        - quantity is increased
         */
-        let mut merged = HashMap::new();
+        let mut merged: HashMap<String, Item> = HashMap::new();
 
         for item in self.items.iter() {
             if merged.contains_key(&item.unique_id) {
-                /*
-                The designator is a list, and we want to merge current
-                designators with new ones.
-                */
-                let prev: &mut Item = merged.get_mut(&item.unique_id).unwrap();
-                let mut designators = Vec::new();
-                if let Some(Field::Designator(f)) = prev
-                    .fields
-                    .iter()
-                    .find(|f| matches!(f, Field::Designator(_)))
-                {
-                    designators = f.clone();
-                }
+                if let Some(mut row) = merged.get_mut(&item.unique_id) {
+                    /* The rows with same unique id should be merge, so first we
+                    get out the Fields that was mergeable*/
 
-                let index = prev
-                    .fields
-                    .iter()
-                    .position(|x| *x == Field::Designator(designators.clone()))
-                    .unwrap();
-                prev.fields.remove(index);
-
-                for f in item.fields.iter() {
-                    if let Field::Designator(d) = f {
-                        designators.append(&mut d.clone());
-                        break;
+                    let mut designators = Vec::new();
+                    for f in item.fields.iter() {
+                        if let Field::Designator(d) = f {
+                            designators.append(&mut d.clone());
+                            break;
+                        }
                     }
+                    //
+                    for f in row.fields.iter_mut() {
+                        if let Field::Designator(d) = f {
+                            d.extend(designators.clone());
+                            row.quantity += designators.len();
+                            break;
+                        }
+                    }
+
+                    // Merge exta column togheter, in this case we put in
+                    // one sigle list only the unique string
                 }
-                prev.fields.push(Field::Designator(designators.clone()));
-                prev.quantity = designators.len();
             } else {
                 merged.insert(item.unique_id.clone(), item.clone());
             }
@@ -307,26 +289,6 @@ impl Bom {
         Bom {
             items: merged.values().cloned().collect(),
         }
-    }
-
-    pub fn odered_vector(&mut self) -> Vec<Vec<String>> {
-        let mut items: Vec<Vec<String>> = vec![];
-
-        self.items.sort_by(|a, b| b.category.cmp(&a.category));
-        for item in self.items.iter() {
-            let mut m: Vec<String> = Vec::new();
-            m.push(format!("{}", item.category));
-            m.push(format!("{}", item.is_merged));
-            m.push(format!("{}", item.is_np));
-            m.push(format!("{}", item.quantity));
-            let mut d = item.fields.clone().into_iter().collect::<Vec<Field>>();
-            d.sort();
-            for field in d.iter() {
-                m.push(field.to_string());
-            }
-            items.push(m.clone());
-        }
-        items
     }
 
     pub fn odered_vector_table(&mut self) -> ItemsTable {
@@ -340,16 +302,9 @@ impl Bom {
             println!("{:?}", m);
 
             for f in d.iter() {
-                if let Field::Note(d) = f {
-                    let note = format!("Note {}", d.hdr);
-                    if !items_table.headers.contains(&note) {
-                        items_table.headers.push(note);
-                    }
-                }
-                if let Field::Code(d) = f {
-                    let code = format!("Code {}", d.hdr);
-                    if !items_table.headers.contains(&code) {
-                        items_table.headers.push(code);
+                if let Field::Extra(d) = f {
+                    if !items_table.headers.contains(&d.hdr) {
+                        items_table.headers.push(d.hdr.clone());
                     }
                 }
             }
@@ -608,8 +563,7 @@ pub enum Field {
     Layer(Vec<String>),
     MountTechnology(Vec<String>),
     Invalid(String),
-    Note(ExtraCell),
-    Code(ExtraCell),
+    Extra(ExtraCell),
 }
 
 impl Display for Field {
@@ -621,8 +575,7 @@ impl Display for Field {
             Self::Description(s) => write!(f, "{}", s),
             Self::Layer(v) => write!(f, "{}", v.join(", ")),
             Self::MountTechnology(v) => write!(f, "{}", v.join(", ")),
-            Self::Code(s) => write!(f, "{}", s.value),
-            Self::Note(s) => write!(f, "{}", s.value),
+            Self::Extra(s) => write!(f, "{}", s.value),
             Self::Invalid(s) => write!(f, "{}", s),
         }
     }
@@ -643,30 +596,18 @@ impl Field {
             "description" => Field::Description(value.to_string()),
             "mounttechnology" => Field::MountTechnology(vec![value.to_string()]),
             "layer" => Field::Layer(vec![value.to_string()]),
-            other => match Regex::new(r"code\s(.*)").unwrap().captures(other) {
-                Some(cc) => match cc.get(1) {
+            other => match Regex::new(r"(code|note)\s(.*)").unwrap().captures(other) {
+                Some(cc) => match cc.get(0) {
                     Some(s) => {
                         println!("from_header_and_value: {:?} > {:?}", s, value);
-                        Field::Code(ExtraCell {
+                        Field::Extra(ExtraCell {
                             hdr: s.as_str().to_string(),
                             value: value.to_string().to_uppercase(),
                         })
                     }
                     _ => Field::Invalid(value.to_string()),
                 },
-                _ => match Regex::new(r"note\s(.*)").unwrap().captures(other) {
-                    Some(cc) => match cc.get(1) {
-                        Some(s) => {
-                            println!("from_header_and_value: {:?} > {:?}", s, value);
-                            Field::Note(ExtraCell {
-                                hdr: s.as_str().to_string(),
-                                value: value.to_string().to_uppercase(),
-                            })
-                        }
-                        _ => Field::Invalid(value.to_string()),
-                    },
-                    _ => Field::Invalid(value.to_string()),
-                },
+                _ => Field::Invalid(value.to_string()),
             },
         };
 
@@ -686,8 +627,7 @@ impl Field {
             Field::Description(_) => 4,
             Field::MountTechnology(_) => 5,
             Field::Layer(_) => 6,
-            Field::Note(_) => 7,
-            Field::Code(_) => 8,
+            Field::Extra(_) => 7,
         }
     }
 }
