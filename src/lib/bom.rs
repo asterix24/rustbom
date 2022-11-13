@@ -260,8 +260,7 @@ impl Bom {
             if merged.contains_key(&item.unique_id) {
                 if let Some(mut row) = merged.get_mut(&item.unique_id) {
                     /* The rows with same unique id should be merge, so first we
-                    get out the Fields that was mergeable*/
-
+                    get out the Fields that was mergeable */
                     let mut designators = Vec::new();
                     for f in item.fields.iter() {
                         if let Field::Designator(d) = f {
@@ -269,7 +268,6 @@ impl Bom {
                             break;
                         }
                     }
-                    //
                     for f in row.fields.iter_mut() {
                         if let Field::Designator(d) = f {
                             d.extend(designators.clone());
@@ -278,8 +276,24 @@ impl Bom {
                         }
                     }
 
-                    // Merge exta column togheter, in this case we put in
-                    // one sigle list only the unique string
+                    // Merge exta column togheter, in this case we append
+                    // value in merged vector
+                    for curr_field in item.fields.iter() {
+                        if let Field::Extra(curr) = curr_field {
+                            let mut ok_merged: bool = false;
+                            for merged_field in row.fields.iter_mut() {
+                                if let Field::Extra(merge) = merged_field {
+                                    if merge.hdr == curr.hdr {
+                                        merge.value.extend(curr.value.clone());
+                                        ok_merged = true;
+                                    }
+                                }
+                            }
+                            if !ok_merged {
+                                row.fields.push(Field::Extra(curr.clone()));
+                            }
+                        }
+                    }
                 }
             } else {
                 merged.insert(item.unique_id.clone(), item.clone());
@@ -543,13 +557,13 @@ impl PartialOrd for Category {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtraCell {
     hdr: String,
-    value: String,
+    value: Vec<String>,
 }
 impl Default for ExtraCell {
     fn default() -> Self {
         ExtraCell {
             hdr: "ExtraCell".to_string(),
-            value: "".to_string(),
+            value: vec![],
         }
     }
 }
@@ -575,7 +589,7 @@ impl Display for Field {
             Self::Description(s) => write!(f, "{}", s),
             Self::Layer(v) => write!(f, "{}", v.join(", ")),
             Self::MountTechnology(v) => write!(f, "{}", v.join(", ")),
-            Self::Extra(s) => write!(f, "{}", s.value),
+            Self::Extra(s) => write!(f, "{}", s.value.join(", ")),
             Self::Invalid(s) => write!(f, "{}", s),
         }
     }
@@ -602,7 +616,7 @@ impl Field {
                         println!("from_header_and_value: {:?} > {:?}", s, value);
                         Field::Extra(ExtraCell {
                             hdr: s.as_str().to_string(),
-                            value: value.to_string().to_uppercase(),
+                            value: vec![value.to_string().to_uppercase()],
                         })
                     }
                     _ => Field::Invalid(value.to_string()),
