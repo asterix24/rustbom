@@ -15,8 +15,8 @@ use tokio::{fs::File, io::BufWriter};
 use tokio_util::io::StreamReader;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod lib;
-use lib::{
+mod mergelib;
+use mergelib::{
     bom::{Bom, ItemsTable},
     outjob::OutJobXlsx,
 };
