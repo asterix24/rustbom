@@ -47,16 +47,10 @@ impl OutJobXlsx {
             _ => panic!("Unable to add sheet to open wk"),
         };
 
-        let mut column: u16 = 0;
-        sheet
-            .write_string(self.curr_row, column, "Qty", Some(&fmt_qty))
-            .unwrap();
-        column += 1;
-        for hdr in data.headers.iter() {
+        for (column, hdr) in (0_u16..).zip(data.headers.iter()) {
             sheet
-                .write_string(self.curr_row, column, hdr, Some(&fmt_header))
+                .write_string(self.curr_row, column as u16, hdr, Some(&fmt_header))
                 .unwrap();
-            column += 1;
         }
         self.curr_row += 1;
         let mut curr_header = "".to_string();
