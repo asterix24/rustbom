@@ -81,8 +81,7 @@ impl OutJobXlsx {
 
             // Write all fields
             for (n, d) in i.fields.iter().enumerate() {
-                tracing::debug!("merged {}, np {}", i.is_merged, i.is_np);
-
+                //debug!("merged {}, np {}", i.is_merged, i.is_np);
                 sheet
                     .write_string(self.curr_row, n as u16 + 1, d, Some(&fmt_defalt))
                     .unwrap();

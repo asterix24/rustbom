@@ -1,18 +1,21 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    ffi::OsStr,
-    fmt,
-    path::Path,
-    vec,
-};
-
 use anyhow::{bail, Result};
 use calamine::{open_workbook_auto, DataType, Reader};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use std::{cmp::Ordering, collections::HashMap, ffi::OsStr, fmt, path::Path, vec};
 use strum_macros::EnumIter;
+
+const HEADERS: [&str; 7] = [
+    "quantity",
+    "designator",
+    "comment",
+    "footprint",
+    "description",
+    "layer",
+    "mounttechnology",
+];
 
 fn uppercase_first_letter(s: &str) -> String {
     let mut c = s.chars();
@@ -125,44 +128,15 @@ pub struct ItemView {
     pub fields: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ItemsTable {
     pub headers: Vec<String>,
     pub rows: Vec<ItemView>,
 }
 
-impl Default for ItemsTable {
-    fn default() -> Self {
-        ItemsTable {
-            headers: vec![
-                "Quantity".to_string(),
-                "Designator".to_string(),
-                "Comment".to_string(),
-                "Footprint".to_string(),
-                "Description".to_string(),
-                "Layer".to_string(),
-                "MountTechnology".to_string(),
-            ],
-            rows: Vec::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Bom {
     items: Vec<Item>,
-}
-
-impl Ord for Field {
-    fn cmp(&self, other: &Self) -> Ordering {
-        (self.enum_to_usize()).cmp(&other.enum_to_usize())
-    }
-}
-
-impl PartialOrd for Field {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 impl Bom {
@@ -189,9 +163,8 @@ impl Bom {
                 .extension()
                 .and_then(OsStr::to_str)
                 .unwrap();
-            println!("{:?}", i.as_ref());
             if ext != "csv" {
-                println!("{:?} {:?} != csv: skip..", i.as_ref(), ext);
+                warn!("{:?} {:?} != csv: skip..", i.as_ref(), ext);
                 continue;
             }
             let (rows, headers) = csv_loader(i.as_ref());
@@ -210,9 +183,8 @@ impl Bom {
                 .extension()
                 .and_then(OsStr::to_str)
                 .unwrap();
-            println!("{:?}", i.as_ref());
             if ext != "xlsx" && ext != "xls" {
-                println!("{:?} {:?} != xlsx xls: skip..", i.as_ref(), ext);
+                warn!("{:?} {:?} != xlsx xls: skip..", i.as_ref(), ext);
                 continue;
             }
             let (rows, headers) = xlsx_loader(i);
@@ -230,27 +202,20 @@ impl Bom {
                 items.push(item);
             }
         }
-
         Ok(items)
     }
 
     fn parse_row(row: &[String], headers: &HeaderMap) -> Result<Item> {
-        println!(">hdr found: {:?}", headers);
         let mut items = Item::default();
         for (i, field) in row.iter().enumerate() {
-            //print!("=> {:?}", field);
             if let Some(h) = headers.get(&i) {
-                //println!("parse_row --> {:?}", h);
-                if let Ok(m) = Field::from_header_and_value(h, field) {
-                    if !items.fields.contains(&m) {
-                        items.fields.insert(m);
-                    }
+                if let Ok((hdr, value)) = Field::from_header_and_value(h, field) {
+                    items.fields.entry(hdr.clone()).or_insert(value);
                 }
             } else {
-                println!("--> No header {} for {}, skip it", i, field);
+                warn!("Parse: No header {} for {}, skip it", i, field);
             };
         }
-
         Ok(items.guess_category().generate_uuid())
     }
 
@@ -262,71 +227,51 @@ impl Bom {
         - quantity is increased
         */
         let mut merged: HashMap<String, Item> = HashMap::new();
-
         for item in self.items.iter() {
-            if merged.contains_key(&item.unique_id) {
-                if let Some(row) = merged.get_mut(&item.unique_id) {
-                    /* The rows with same unique id should be merge, so first we
-                    get out the Fields that was mergeable */
-                    let mut prev = Field::Designator(vec![]);
-                    if let Some(curr_designator) = item
-                        .fields
-                        .iter()
-                        .find(|f| matches!(f, Field::Designator(_)))
-                    {
-                        if let Some(prev_designator) = row
-                            .fields
-                            .iter()
-                            .find(|f| matches!(f, Field::Designator(_)))
-                        {
-                            curr_designator.expand_designator(prev_designator);
-                            prev = prev_designator.clone();
-                            row.fields.insert(curr_designator.clone());
-                        }
+            info!("unique_id: {:?}", item.unique_id);
+            if let Some(prev) = merged.get_mut(&item.unique_id) {
+                /* The rows with same unique id should be merge, so first we
+                get out the Fields that was mergeable */
+                if let Some(Field::List(dd)) = prev.fields.get_mut("designator") {
+                    if let Some(Field::List(last_dd)) = item.fields.get("designator") {
+                        dd.extend(last_dd.clone());
                     }
-                    row.fields.remove(&prev);
-
-                    // Merge exta column togheter, in this case we append
-                    // value in merged vector
-                    for extra in item.fields.iter() {
-                        if matches!(extra, Field::Extra(_)) {
-                            print!("Merge extra >>> {:?}", extra);
-                            if row.fields.contains(extra) {
-                                println!(" -> Contiene");
-                            } else {
-                                row.fields.insert(extra.clone());
-                                println!(" -> Insert");
-                            }
-                        }
-                    }
+                    dd.sort();
+                    dd.dedup();
+                    prev.quantity = dd.len();
                 }
             } else {
                 merged.insert(item.unique_id.clone(), item.clone());
             }
         }
-
         Bom {
             items: merged.values().cloned().collect(),
         }
     }
 
     pub fn odered_vector_table(&mut self) -> ItemsTable {
-        let mut items_table: ItemsTable = ItemsTable::default();
+        let mut items_table = ItemsTable::default();
         self.items.sort_by(|a, b| b.category.cmp(&a.category));
+        let mut headers: Vec<String> = HEADERS.iter().map(|f| f.to_string()).collect();
         for item in self.items.iter() {
-            let mut d = item.fields.clone().into_iter().collect::<Vec<Field>>();
-            d.sort();
-
-            let m: Vec<String> = d.iter().map(|f| f.to_string()).collect();
-
-            for f in d.iter() {
-                if let Field::Extra(d) = f {
-                    if !items_table.headers.contains(&d.hdr) {
-                        items_table.headers.push(d.hdr.clone());
-                    }
+            for hdr in item.fields.iter() {
+                if !headers.contains(hdr.0) {
+                    headers.push(hdr.0.clone());
                 }
             }
-            println!("ItemsTable Headers: {:?}", items_table.headers);
+            let mut m: Vec<String> = vec![];
+            for hdr in headers.iter() {
+                if item.fields.contains_key(hdr) {
+                    m.push(format!("{}", item.fields[hdr]));
+                }
+            }
+
+            //item.fields.iter().map(|f| f.1.to_string()).collect();
+            //debug!("Fields: {:?}", item.fields);
+            //let mut m = ;
+            //d.sort();
+            //println!("ItemsTable H: {:?}", items_table.headers);
+            //println!("ItemsTable V: {:?}", m);
 
             items_table.rows.push(ItemView {
                 quantity: item.quantity,
@@ -336,6 +281,10 @@ impl Bom {
                 is_np: item.is_np,
                 fields: m,
             });
+        }
+
+        for hdr in headers.iter() {
+            items_table.headers.push(uppercase_first_letter(hdr));
         }
         items_table
     }
@@ -350,12 +299,12 @@ pub struct Item {
     is_merged: bool,
     is_np: bool,
     pub category: Category,
-    fields: HashSet<Field>,
+    fields: HashMap<String, Field>,
 }
 
 impl Item {
     pub fn default() -> Self {
-        let fields = HashSet::new();
+        let fields = HashMap::new();
         Self {
             quantity: 0,
             unique_id: "".to_string(),
@@ -367,18 +316,11 @@ impl Item {
     }
 
     pub fn guess_category(&mut self) -> Self {
-        let mut category: Category = Category::Invalid;
-        for i in self.fields.iter() {
-            //println!("{:?}", i);
-            if let Field::Designator(d) = i {
-                let m = match d.get(0) {
-                    Some(m) => m,
-                    None => "",
-                };
-
-                category = match Regex::new(r"^([a-zA-Z_]{1,3})")
+        self.category = match self.fields.get("designator") {
+            Some(d) => {
+                match Regex::new(r"^([a-zA-Z_]{1,3})")
                     .unwrap()
-                    .captures(m.to_lowercase().as_str())
+                    .captures(d.get_element_list().as_str())
                 {
                     None => Category::Invalid,
                     Some(cc) => match String::from(cc.get(1).map_or("", |m| m.as_str()))
@@ -401,27 +343,36 @@ impl Item {
                         _ => Category::Invalid,
                     },
                 }
-            };
-        }
-        self.category = category;
+            }
+            _ => Category::Invalid,
+        };
         self.clone()
     }
 
     fn generate_uuid(&mut self) -> Self {
-        let mut description: Field = Field::Description("".to_string());
-        let mut comment: Field = Field::Comment("".to_string());
-        let footprint: Field = Field::Footprint("".to_string());
+        let mut description = Field::Invalid("-".to_string());
+        if let Some(d) = self.fields.get("description") {
+            description = d.clone();
+        };
+
+        let mut comment = Field::Invalid("-".to_string());
+        if let Some(d) = self.fields.get("comment") {
+            comment = d.clone();
+        };
+
+        let mut footprint = Field::Invalid("-".to_string());
+        if let Some(d) = self.fields.get("footprint") {
+            footprint = d.clone();
+        };
+
+        let mut designator = Field::Invalid("-".to_string());
+        if let Some(d) = self.fields.get("designator") {
+            designator = d.clone();
+        };
+
         self.is_merged = false;
         self.is_np = false;
-
-        for i in self.fields.iter() {
-            match i {
-                Field::Description(d) => description = Field::Description(d.clone()),
-                Field::Designator(c) => self.quantity = c.len(),
-                Field::Comment(c) => comment = Field::Comment(c.clone()),
-                _ => (),
-            }
-        }
+        self.quantity = designator.get_list_len();
 
         self.unique_id = format!(
             "{:?}-{}-{}-{}",
@@ -441,31 +392,26 @@ impl Item {
                  * because, the comment could be diffent also for same component. This also because
                  * the comment hold the label of pcb connector
                  */
-                self.fields.remove(&comment);
                 if Regex::new("^NP ")
                     .unwrap()
                     .is_match(comment.to_string().as_str())
                 {
-                    comment = Field::Comment("NP Connector".to_string());
+                    comment = Field::Item("NP Connector".to_string());
                 } else {
-                    comment = Field::Comment("Connector".to_string());
+                    comment = Field::Item("Connector".to_string());
                 }
                 self.unique_id = format!(
                     "{:?}-{}-{}-{}-connector",
                     self.category, comment, footprint, description
                 );
                 self.is_merged = true;
-                self.fields.insert(comment);
             }
             Category::Mechanicals => {
                 /*
                  * Tactile switch could be have different label, but the component was same
                  */
                 if footprint.to_string().to_lowercase().contains("tactile") {
-                    self.fields.remove(&comment);
-                    self.fields
-                        .insert(Field::Comment("Tactile Switch".to_string()));
-
+                    comment = Field::Item("Tactile Switch".to_string());
                     self.unique_id =
                         format!("{:?}-{}-{}-tactile", self.category, footprint, description);
                     self.is_merged = true;
@@ -476,8 +422,7 @@ impl Item {
                  * Diode led could be have different label, but the component was same
                  */
                 if footprint.to_string().to_lowercase().contains("LED") {
-                    self.fields.remove(&comment);
-                    self.fields.insert(Field::Comment("Diode LED".to_string()));
+                    comment = Field::Item("Diode LED".to_string());
                     self.unique_id =
                         format!("{:?}-{}-{}-LED", self.category, footprint, description);
                     self.is_merged = true;
@@ -487,8 +432,7 @@ impl Item {
                 if footprint.to_string().to_lowercase().contains("rele")
                     || footprint.to_string().to_lowercase().contains("relay")
                 {
-                    self.fields.remove(&comment);
-                    self.fields.insert(Field::Comment("Diode LED".to_string()));
+                    comment = Field::Item("Diode LED".to_string());
                     self.unique_id =
                         format!("{:?}-{}-{}-relay", self.category, footprint, description);
                     self.is_merged = true;
@@ -497,6 +441,11 @@ impl Item {
             _ => {}
         };
 
+        info!(
+            "unique id >> {:} {:} {:} {:}",
+            self.unique_id, comment, footprint, description,
+        );
+        self.fields.entry("comment".to_string()).or_insert(comment);
         self.clone()
     }
 }
@@ -516,6 +465,7 @@ pub enum Category {
     IC,
     Invalid,
 }
+
 impl Category {
     fn enum_to_usize(&self) -> usize {
         match self {
@@ -567,74 +517,69 @@ impl PartialOrd for Category {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExtraCell {
-    hdr: String,
-    value: Vec<String>,
-}
-impl Default for ExtraCell {
-    fn default() -> Self {
-        ExtraCell {
-            hdr: "ExtraCell".to_string(),
-            value: vec![],
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Field {
-    Designator(Vec<String>),
-    Comment(String),
-    Footprint(String),
-    Description(String),
-    Layer(Vec<String>),
-    MountTechnology(Vec<String>),
+    List(Vec<String>),
+    Item(String),
     Invalid(String),
-    Extra(ExtraCell),
 }
 
 impl Display for Field {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Designator(v) => write!(f, "{}", v.join(", ")),
-            Self::Comment(s) => write!(f, "{}", s),
-            Self::Footprint(s) => write!(f, "{}", s),
-            Self::Description(s) => write!(f, "{}", s),
-            Self::Layer(v) => write!(f, "{}", v.join(", ")),
-            Self::MountTechnology(v) => write!(f, "{}", v.join(", ")),
-            Self::Extra(s) => write!(f, "{}", s.value.join(", ")),
+            Self::List(v) => write!(f, "{}", v.join(", ")),
+            Self::Item(s) => write!(f, "{}", s),
             Self::Invalid(s) => write!(f, "{}", s),
         }
     }
 }
 
 impl Field {
-    fn from_header_and_value(header: &str, value: &str) -> Result<Field> {
-        let field: Field = match header.to_lowercase().as_str() {
-            "designator" => Field::Designator(
+    fn get_element_list(&self) -> String {
+        match self {
+            Field::List(m) => {
+                if let Some(x) = m.get(0) {
+                    x.to_lowercase()
+                } else {
+                    "".to_string()
+                }
+            }
+            _ => "".to_string(),
+        }
+    }
+
+    fn get_list_len(&self) -> usize {
+        match self {
+            Field::List(m) => m.len(),
+            _ => 0,
+        }
+    }
+
+    fn get_element_item(&self) -> &str {
+        match self {
+            Field::Item(m) => m.as_str(),
+            _ => "",
+        }
+    }
+
+    fn from_header_and_value(header: &str, value: &str) -> Result<(String, Field)> {
+        let mut hdr = header.to_lowercase();
+        let field: Field = match hdr.as_str() {
+            "designator" => Field::List(
                 value
                     .to_string()
                     .split(',')
                     .map(|m| m.trim().to_string())
                     .collect(),
             ),
-            "comment" => Field::Comment(value.to_string()),
-            "footprint" => Field::Footprint(value.to_string()),
-            "description" => Field::Description(value.to_string()),
-            "mounttechnology" => Field::MountTechnology(vec![value.to_string()]),
-            "layer" => Field::Layer(vec![value.to_string()]),
+            "comment" | "footprint" | "description" | "mounttechnology" | "layer" => {
+                Field::Item(value.to_string())
+            }
             other => match Regex::new(r"(code|note)\s(.*)").unwrap().captures(other) {
                 Some(cc) => match cc.get(0) {
                     Some(s) => {
-                        println!(
-                            "from_header_and_value: {:?} > h{:?} -> {:?}",
-                            s,
-                            s.as_str().to_string(),
-                            value
-                        );
-                        Field::Extra(ExtraCell {
-                            hdr: s.as_str().to_string(),
-                            value: vec![value.to_string().to_uppercase()],
-                        })
+                        //debug!("{:?} > h{:?} -> {:?}", s, s.as_str().to_string(), value);
+                        hdr = s.as_str().to_string();
+                        Field::List(vec![value.to_string().to_uppercase()])
                     }
                     _ => Field::Invalid(value.to_string()),
                 },
@@ -643,63 +588,8 @@ impl Field {
         };
 
         if field == Field::Invalid(value.to_string()) {
-            bail!("Invalid field {} -> {}", header, value);
+            bail!("Invalid field {} -> {}", hdr, value);
         }
-
-        Ok(field)
-    }
-
-    pub fn enum_to_usize(&self) -> usize {
-        match self {
-            Field::Invalid(_) => 0,
-            Field::Designator(_) => 1,
-            Field::Comment(_) => 2,
-            Field::Footprint(_) => 3,
-            Field::Description(_) => 4,
-            Field::MountTechnology(_) => 5,
-            Field::Layer(_) => 6,
-            Field::Extra(_) => 7,
-        }
-    }
-
-    pub fn expand_designator(&self, prev: &Field) -> Field {
-        let mut designators: Vec<String> = vec![];
-        match prev {
-            Field::Designator(d) => designators.extend(d.clone()),
-            _ => panic!("expand Wrong field type"),
-        };
-        match self {
-            Field::Designator(d) => designators.extend(d.clone()),
-            _ => panic!("Self Wrong field type"),
-        };
-
-        Field::Designator(designators)
-    }
-
-    pub fn expand_extra(&self, prev: &Field) -> Field {
-        let hdr_prev;
-        let hdr_self;
-
-        let mut extra: ExtraCell = ExtraCell::default();
-        match prev {
-            Field::Extra(cell) => {
-                hdr_prev = cell.hdr.clone();
-                extra.value.extend(cell.value.clone())
-            }
-            _ => panic!("expand Wrong field type"),
-        };
-        match self {
-            Field::Extra(cell) => {
-                hdr_self = cell.hdr.clone();
-                extra.value.extend(cell.value.clone())
-            }
-            _ => panic!("Self Wrong field type"),
-        };
-
-        if hdr_prev != hdr_self {
-            panic!("ExtraCell header mismatch!");
-        }
-
-        Field::Extra(extra)
+        Ok((hdr, field))
     }
 }
