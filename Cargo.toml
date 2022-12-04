@@ -5,6 +5,8 @@ edition = "2021"
 authors = ["Daniele Basile <asterix24@gmail.com>"]
 
 [dependencies]
+log = "0.4.17"
+env_logger = "0.10.0"
 futures = "0.3"
 csv = "1.1"
 axum = { version = "0.5", features = ["multipart"] }
