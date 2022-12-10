@@ -122,7 +122,6 @@
                         prev_category = value.category;
                     }
                     var newRow = tbodyRef.insertRow();
-                    newRow.insertCell().innerHTML = value.quantity;
                     for (let i = 0; i < value.fields.length; i++) {
                         var newCell = newRow.insertCell();
                         newCell.innerHTML = value.fields[i];

@@ -69,22 +69,14 @@ impl OutJobXlsx {
                 curr_header = i.category.clone();
                 self.curr_row += 1;
             }
-            // Write quantity
-            sheet
-                .write_string(
-                    self.curr_row,
-                    0,
-                    i.quantity.to_string().as_str(),
-                    Some(&fmt_qty),
-                )
-                .unwrap();
-
             // Write all fields
             for (n, d) in i.fields.iter().enumerate() {
                 //debug!("merged {}, np {}", i.is_merged, i.is_np);
-                sheet
-                    .write_string(self.curr_row, n as u16 + 1, d, Some(&fmt_defalt))
-                    .unwrap();
+                let mut fmt = Some(&fmt_defalt);
+                if n == 0 {
+                    fmt = Some(&fmt_qty);
+                }
+                sheet.write_string(self.curr_row, n as u16, d, fmt).unwrap();
             }
 
             self.curr_row += 1;
