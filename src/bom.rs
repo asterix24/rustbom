@@ -7,16 +7,6 @@ use std::fmt::{Display, Formatter};
 use std::{cmp::Ordering, collections::HashMap, ffi::OsStr, fmt, path::Path, vec};
 use strum_macros::EnumIter;
 
-const HEADERS: [&str; 7] = [
-    "quantity",
-    "designator",
-    "comment",
-    "footprint",
-    "description",
-    "layer",
-    "mounttechnology",
-];
-
 fn uppercase_first_letter(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
@@ -120,7 +110,6 @@ fn csv_loader<P: AsRef<Path>>(path: P) -> (Vec<Vec<String>>, HeaderMap) {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ItemView {
-    pub quantity: usize,
     pub unique_id: String,
     pub is_merged: bool,
     pub is_np: bool,
@@ -250,42 +239,58 @@ impl Bom {
     }
 
     pub fn odered_vector_table(&mut self) -> ItemsTable {
-        let mut items_table = ItemsTable::default();
-        self.items.sort_by(|a, b| b.category.cmp(&a.category));
-        let mut headers: Vec<String> = HEADERS.iter().map(|f| f.to_string()).collect();
+        let mut headers: HashMap<String, usize> = HashMap::new();
+        headers.insert("quantity".to_string(), 0);
+        headers.insert("designator".to_string(), 1);
+        headers.insert("comment".to_string(), 2);
+        headers.insert("footprint".to_string(), 3);
+        headers.insert("description".to_string(), 4);
+        headers.insert("layer".to_string(), 5);
+        headers.insert("mounttechnology".to_string(), 6);
+
+        // Get header map and row max len
+        let mut row_capacity: usize = headers.len() - 1;
         for item in self.items.iter() {
             for hdr in item.fields.iter() {
-                if !headers.contains(hdr.0) {
-                    headers.push(hdr.0.clone());
+                if !headers.contains_key(hdr.0) {
+                    headers.insert(hdr.0.clone(), row_capacity);
+                    row_capacity += 1;
                 }
+                warn!("{} {} {}", row_capacity, headers[hdr.0], hdr.0);
             }
-            let mut m: Vec<String> = vec![];
-            for hdr in headers.iter() {
-                if item.fields.contains_key(hdr) {
-                    m.push(format!("{}", item.fields[hdr]));
-                }
-            }
+        }
 
-            //item.fields.iter().map(|f| f.1.to_string()).collect();
-            //debug!("Fields: {:?}", item.fields);
-            //let mut m = ;
-            //d.sort();
-            //println!("ItemsTable H: {:?}", items_table.headers);
-            //println!("ItemsTable V: {:?}", m);
+        let mut items_table = ItemsTable::default();
+        self.items.sort_by(|a, b| b.category.cmp(&a.category));
+        let mut header_str = Vec::from_iter(headers.iter());
+        header_str.sort_by(|a, b| a.1.cmp(b.1));
+        items_table.headers = header_str
+            .iter()
+            .map(|k| uppercase_first_letter(k.0))
+            .collect();
+
+        for item in self.items.iter() {
+            let mut m: Vec<String> = vec!["".to_string(); row_capacity];
+            m.insert(0, format!("{}", item.quantity));
+
+            for k in item.fields.iter() {
+                if headers.contains_key(k.0) {
+                    let value = format!("{:}", k.1);
+                    m[headers[k.0]] = value.clone();
+                    info!("{} {} {}", row_capacity, headers[k.0], value);
+                }
+            }
 
             items_table.rows.push(ItemView {
-                quantity: item.quantity,
                 unique_id: item.unique_id.clone(),
                 category: format!("{}", item.category),
                 is_merged: item.is_merged,
                 is_np: item.is_np,
-                fields: m,
+                fields: m.clone(),
             });
+            debug!("{:?}", m);
         }
 
-        for hdr in headers.iter() {
-            items_table.headers.push(uppercase_first_letter(hdr));
-        }
         items_table
     }
 }
