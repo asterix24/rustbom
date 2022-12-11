@@ -128,6 +128,16 @@ pub struct Bom {
     items: Vec<Item>,
 }
 
+const STD_HEADERS: [&str; 7] = [
+    "quantity",
+    "designator",
+    "comment",
+    "footprint",
+    "description",
+    "layer",
+    "mounttechnology",
+];
+
 impl Bom {
     pub fn loader<P: AsRef<Path>>(path: &[P]) -> Bom {
         let mut it1: Vec<Item> = Vec::new();
@@ -209,7 +219,8 @@ impl Bom {
     }
 
     pub fn merge(&self) -> Bom {
-        /* Merge policy:
+        /*
+        Merge policy:
         All Item element was merged by unique_id, if two row have same unique_id we could merge it in one, but:
         - if NP, skip it
         - designators is put all togheter in vector
@@ -229,6 +240,21 @@ impl Bom {
                     dd.dedup();
                     prev.quantity = dd.len();
                 }
+
+                for c in item.fields.keys() {
+                    if STD_HEADERS.contains(&c.as_str()) {
+                        continue;
+                    }
+                    if let Some(Field::List(dd)) = prev.fields.get_mut(c) {
+                        if let Some(Field::List(last_dd)) = item.fields.get(c) {
+                            dd.extend(last_dd.clone());
+                        }
+                        dd.sort();
+                        dd.dedup();
+                    } else if let Some(m) = item.fields.get(c) {
+                        prev.fields.insert(c.clone(), m.clone());
+                    }
+                }
             } else {
                 merged.insert(item.unique_id.clone(), item.clone());
             }
@@ -240,23 +266,23 @@ impl Bom {
 
     pub fn odered_vector_table(&mut self) -> ItemsTable {
         let mut headers: HashMap<String, usize> = HashMap::new();
-        headers.insert("quantity".to_string(), 0);
-        headers.insert("designator".to_string(), 1);
-        headers.insert("comment".to_string(), 2);
-        headers.insert("footprint".to_string(), 3);
-        headers.insert("description".to_string(), 4);
-        headers.insert("layer".to_string(), 5);
-        headers.insert("mounttechnology".to_string(), 6);
+        for (i, h) in STD_HEADERS.iter().enumerate() {
+            info!("mappa->{} {}", i, h);
+            headers.insert(h.to_string(), i);
+        }
 
         // Get header map and row max len
-        let mut row_capacity: usize = headers.len() - 1;
+        let mut row_capacity: usize = headers.len();
         for item in self.items.iter() {
             for hdr in item.fields.iter() {
                 if !headers.contains_key(hdr.0) {
                     headers.insert(hdr.0.clone(), row_capacity);
                     row_capacity += 1;
                 }
-                warn!("{} {} {}", row_capacity, headers[hdr.0], hdr.0);
+                info!(
+                    "Header MAP -> {} {} {}",
+                    row_capacity, headers[hdr.0], hdr.0
+                );
             }
         }
 
@@ -271,7 +297,7 @@ impl Bom {
 
         for item in self.items.iter() {
             let mut m: Vec<String> = vec!["".to_string(); row_capacity];
-            m.insert(0, format!("{}", item.quantity));
+            m[0] = format!("{}", item.quantity);
 
             for k in item.fields.iter() {
                 if headers.contains_key(k.0) {
@@ -556,13 +582,6 @@ impl Field {
         match self {
             Field::List(m) => m.len(),
             _ => 0,
-        }
-    }
-
-    fn get_element_item(&self) -> &str {
-        match self {
-            Field::Item(m) => m.as_str(),
-            _ => "",
         }
     }
 
