@@ -16,7 +16,7 @@ use tokio_util::io::StreamReader;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use mergebom_web::{
-    bom::{Bom, ItemsTable},
+    bom::{merge_key_list, Bom, ItemsTable},
     outjob::OutJobXlsx,
 };
 
@@ -78,7 +78,8 @@ struct IndexTemplate {
     merge_dir: String,
     upload_dir: String,
     uploaded_bom_list: Vec<String>,
-    megerd_bom_list: Vec<String>,
+    merged_bom_list: Vec<String>,
+    merge_key_list: Vec<String>,
 }
 struct HtmlTemplate<T>(T);
 
@@ -104,7 +105,8 @@ async fn render_index() -> impl IntoResponse {
         merge_dir: MERGED_DIRECTORY.to_string(),
         upload_dir: UPLOADS_DIRECTORY.to_string(),
         uploaded_bom_list: files_on_server(UPLOADS_DIRECTORY),
-        megerd_bom_list: files_on_server(MERGED_DIRECTORY),
+        merged_bom_list: files_on_server(MERGED_DIRECTORY),
+        merge_key_list: merge_key_list(),
     })
 }
 
@@ -122,6 +124,7 @@ async fn jobs_done() -> Json<JobDone> {
 struct MergeCfg {
     merge_file_name: String,
     merge_files: Vec<String>,
+    merge_keys: Vec<String>,
 }
 
 async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<ItemsTable> {
@@ -136,7 +139,7 @@ async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<ItemsTable> {
         file_name = payload.merge_file_name;
     }
 
-    let bom = Bom::loader(files.as_slice());
+    let bom = Bom::loader(files.as_slice(), &[payload.merge_keys]);
     let data = bom.merge().odered_vector_table();
     OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join(file_name)).write(&data);
     Json(data)

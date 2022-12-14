@@ -138,15 +138,24 @@ const STD_HEADERS: [&str; 7] = [
     "mounttechnology",
 ];
 
+pub fn merge_key_list() -> Vec<String> {
+    let mut keys: Vec<String> = Vec::new();
+    for i in STD_HEADERS {
+        keys.push(i.to_string());
+    }
+
+    keys
+}
+
 impl Bom {
-    pub fn loader<P: AsRef<Path>>(path: &[P]) -> Bom {
+    pub fn loader<P: AsRef<Path>>(path: &[P], merge_keys: &[Vec<String>]) -> Bom {
         let mut it1: Vec<Item> = Vec::new();
-        if let Ok(i) = Bom::from_csv(path) {
+        if let Ok(i) = Bom::from_csv(path, merge_keys) {
             it1 = i;
         }
 
         let mut it2: Vec<Item> = Vec::new();
-        if let Ok(i) = Bom::from_xlsx(path) {
+        if let Ok(i) = Bom::from_xlsx(path, merge_keys) {
             it2 = i;
         }
 
@@ -154,7 +163,7 @@ impl Bom {
         Bom { items: it1 }
     }
 
-    pub fn from_csv<P: AsRef<Path>>(path: &[P]) -> Result<Vec<Item>> {
+    pub fn from_csv<P: AsRef<Path>>(path: &[P], merge_keys: &[Vec<String>]) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
 
         for i in path.iter() {
@@ -167,14 +176,14 @@ impl Bom {
                 continue;
             }
             let (rows, headers) = csv_loader(i.as_ref());
-            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers) {
+            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers, merge_keys) {
                 items.append(&mut ii);
             }
         }
         Ok(items)
     }
 
-    pub fn from_xlsx<P: AsRef<Path>>(path: &[P]) -> Result<Vec<Item>> {
+    pub fn from_xlsx<P: AsRef<Path>>(path: &[P], merge_keys: &[Vec<String>]) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
 
         for i in path.iter() {
@@ -187,24 +196,28 @@ impl Bom {
                 continue;
             }
             let (rows, headers) = xlsx_loader(i);
-            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers) {
+            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers, merge_keys) {
                 items.append(&mut ii);
             }
         }
         Ok(items)
     }
 
-    fn from_rows_and_headers(rows: &[Vec<String>], headers: &HeaderMap) -> Result<Vec<Item>> {
+    fn from_rows_and_headers(
+        rows: &[Vec<String>],
+        headers: &HeaderMap,
+        merge_keys: &[Vec<String>],
+    ) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
         for row in rows.iter() {
-            if let Ok(item) = Self::parse_row(row, headers) {
+            if let Ok(item) = Self::parse_row(row, headers, merge_keys) {
                 items.push(item);
             }
         }
         Ok(items)
     }
 
-    fn parse_row(row: &[String], headers: &HeaderMap) -> Result<Item> {
+    fn parse_row(row: &[String], headers: &HeaderMap, merge_keys: &[Vec<String>]) -> Result<Item> {
         let mut items = Item::default();
         for (i, field) in row.iter().enumerate() {
             if let Some(h) = headers.get(&i) {
@@ -215,7 +228,7 @@ impl Bom {
                 warn!("Parse: No header {} for {}, skip it", i, field);
             };
         }
-        Ok(items.guess_category().generate_uuid())
+        Ok(items.guess_category().generate_uuid(merge_keys))
     }
 
     pub fn merge(&self) -> Bom {
@@ -279,10 +292,10 @@ impl Bom {
                     headers.insert(hdr.0.clone(), row_capacity);
                     row_capacity += 1;
                 }
-                info!(
-                    "Header MAP -> {} {} {}",
-                    row_capacity, headers[hdr.0], hdr.0
-                );
+                // info!(
+                //     "Header MAP -> {} {} {}",
+                //     row_capacity, headers[hdr.0], hdr.0
+                // );
             }
         }
 
@@ -380,7 +393,11 @@ impl Item {
         self.clone()
     }
 
-    fn generate_uuid(&mut self) -> Self {
+    fn generate_uuid(&mut self, merge_keys: &[Vec<String>]) -> Self {
+        for key in merge_keys.iter() {
+            info!("unique ID -> {:?}", key);
+        }
+
         let mut description = Field::Invalid("-".to_string());
         if let Some(d) = self.fields.get("description") {
             description = d.clone();
@@ -399,6 +416,11 @@ impl Item {
         let mut designator = Field::Invalid("-".to_string());
         if let Some(d) = self.fields.get("designator") {
             designator = d.clone();
+        };
+
+        let mut layer = Field::Invalid("-".to_string());
+        if let Some(d) = self.fields.get("layer") {
+            layer = d.clone();
         };
 
         self.is_merged = false;

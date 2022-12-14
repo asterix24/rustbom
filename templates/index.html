@@ -18,11 +18,22 @@
     <div id="content">
         <h1>MergeBom Web</h1>
         <p id="error"></p>
+        <div>
+            <ul id="merge_keys">
+                {% for key in merge_key_list %}
+                <li>
+                    <input type="checkbox" name="{{key}}" value="{{key}}">
+                    <label for="{{key}}">{{loop.index}}:{{key}}</label>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
         <form onsubmit="itemListView(event)">
             <label for="mergedFileName">Merged file name:</label>
             <input type="text" id="mergedFileName" name="merged_bom.xlsx">
             <input type="submit" value="merge" />
         </form>
+        <br>
         <form enctype="multipart/form-data" onsubmit="uploadBomFile(event)">
             <input id="BOMfile" type="file" name="static_file" />
             <input type="submit" value="upload" />
@@ -48,7 +59,7 @@
                 </td>
                 <td>
                     <ul id="mergedbomlist">
-                        {% for item in megerd_bom_list %}
+                        {% for item in merged_bom_list %}
                         <li>
                             <a href="/{{merge_dir}}/{{item}}" download="{{item}}">{{loop.index}}:{{item}}</a>
                         </li>
@@ -80,16 +91,26 @@
         async function itemListView(event) {
             event.preventDefault();
 
+            var bf = { "merge_files": [], "merge_file_name": document.getElementById("mergedFileName").value, "merge_keys": [] };
+
             var ul = document.getElementById("bomlist");
             var items = ul.getElementsByTagName("li");
-            var bf = { "merge_files": [], "merge_file_name": document.getElementById("mergedFileName").value };
-
             Object.entries(items).forEach(([idx, value]) => {
                 if (value.getElementsByTagName("input")[0].checked) {
                     console.log(value.getElementsByTagName("input")[0].value);
                     bf["merge_files"].push(value.getElementsByTagName("input")[0].value);
                 }
             });
+
+            var ul = document.getElementById("merge_keys");
+            var items = ul.getElementsByTagName("li");
+            Object.entries(items).forEach(([idx, value]) => {
+                if (value.getElementsByTagName("input")[0].checked) {
+                    console.log(value.getElementsByTagName("input")[0].value);
+                    bf["merge_keys"].push(value.getElementsByTagName("input")[0].value);
+                }
+            });
+
 
             console.log(bf);
             const response = await fetch("/view", {
