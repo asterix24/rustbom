@@ -1,6 +1,8 @@
 use anyhow::{bail, Result};
 use calamine::{open_workbook_auto, DataType, Reader};
 use log::{debug, error, info, warn};
+use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand_pcg::{Pcg32, Pcg64};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -117,6 +119,17 @@ pub struct ItemView {
     pub fields: Vec<String>,
 }
 
+impl Display for ItemView {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let fields: String = self.fields.join(";");
+        write!(
+            f,
+            "{:};{:};{:};{:};{:}",
+            self.unique_id, self.is_merged, self.is_np, self.category, fields
+        )
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ItemsTable {
     pub headers: Vec<String>,
@@ -148,7 +161,7 @@ pub fn merge_key_list() -> Vec<String> {
 }
 
 impl Bom {
-    pub fn loader<P: AsRef<Path>>(path: &[P], merge_keys: &[Vec<String>]) -> Bom {
+    pub fn loader<P: AsRef<Path>>(path: &[P], merge_keys: &[String]) -> Bom {
         let mut it1: Vec<Item> = Vec::new();
         if let Ok(i) = Bom::from_csv(path, merge_keys) {
             it1 = i;
@@ -163,10 +176,11 @@ impl Bom {
         Bom { items: it1 }
     }
 
-    pub fn from_csv<P: AsRef<Path>>(path: &[P], merge_keys: &[Vec<String>]) -> Result<Vec<Item>> {
+    pub fn from_csv<P: AsRef<Path>>(path: &[P], merge_keys: &[String]) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
 
         for i in path.iter() {
+            let mut rng = Pcg32::seed_from_u64(i.as_ref().to_path_buf().capacity() as u64);
             let ext = Path::new(i.as_ref())
                 .extension()
                 .and_then(OsStr::to_str)
@@ -176,17 +190,18 @@ impl Bom {
                 continue;
             }
             let (rows, headers) = csv_loader(i.as_ref());
-            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers, merge_keys) {
+            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers, merge_keys, &mut rng) {
                 items.append(&mut ii);
             }
         }
         Ok(items)
     }
 
-    pub fn from_xlsx<P: AsRef<Path>>(path: &[P], merge_keys: &[Vec<String>]) -> Result<Vec<Item>> {
+    pub fn from_xlsx<P: AsRef<Path>>(path: &[P], merge_keys: &[String]) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
 
         for i in path.iter() {
+            let mut rng = Pcg32::seed_from_u64(i.as_ref().to_path_buf().capacity() as u64);
             let ext = Path::new(i.as_ref())
                 .extension()
                 .and_then(OsStr::to_str)
@@ -196,7 +211,7 @@ impl Bom {
                 continue;
             }
             let (rows, headers) = xlsx_loader(i);
-            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers, merge_keys) {
+            if let Ok(mut ii) = Bom::from_rows_and_headers(&rows, &headers, merge_keys, &mut rng) {
                 items.append(&mut ii);
             }
         }
@@ -206,18 +221,24 @@ impl Bom {
     fn from_rows_and_headers(
         rows: &[Vec<String>],
         headers: &HeaderMap,
-        merge_keys: &[Vec<String>],
+        merge_keys: &[String],
+        seed: &mut Pcg32,
     ) -> Result<Vec<Item>> {
         let mut items: Vec<_> = Vec::new();
         for row in rows.iter() {
-            if let Ok(item) = Self::parse_row(row, headers, merge_keys) {
+            if let Ok(item) = Self::parse_row(row, headers, merge_keys, seed) {
                 items.push(item);
             }
         }
         Ok(items)
     }
 
-    fn parse_row(row: &[String], headers: &HeaderMap, merge_keys: &[Vec<String>]) -> Result<Item> {
+    fn parse_row(
+        row: &[String],
+        headers: &HeaderMap,
+        merge_keys: &[String],
+        seed: &mut Pcg32,
+    ) -> Result<Item> {
         let mut items = Item::default();
         for (i, field) in row.iter().enumerate() {
             if let Some(h) = headers.get(&i) {
@@ -228,7 +249,7 @@ impl Bom {
                 warn!("Parse: No header {} for {}, skip it", i, field);
             };
         }
-        Ok(items.guess_category().generate_uuid(merge_keys))
+        Ok(items.guess_category().generate_uuid(merge_keys, seed))
     }
 
     pub fn merge(&self) -> Bom {
@@ -241,7 +262,6 @@ impl Bom {
         */
         let mut merged: HashMap<String, Item> = HashMap::new();
         for item in self.items.iter() {
-            info!("unique_id: {:?}", item.unique_id);
             if let Some(prev) = merged.get_mut(&item.unique_id) {
                 /* The rows with same unique id should be merge, so first we
                 get out the Fields that was mergeable */
@@ -393,112 +413,87 @@ impl Item {
         self.clone()
     }
 
-    fn generate_uuid(&mut self, merge_keys: &[Vec<String>]) -> Self {
-        for key in merge_keys.iter() {
-            info!("unique ID -> {:?}", key);
+    fn generate_uuid(&mut self, merge_keys: &[String], seed: &mut Pcg32) -> Self {
+        self.unique_id = "".to_string();
+        if merge_keys.is_empty() {
+            for _ in 0..15 {
+                self.unique_id = format!("{}{:}", self.unique_id, seed.gen_range(0..9));
+            }
         }
+        //let mut update_field: (String, Field) = ("".to_string(), Field::Invalid("".to_string()));
+        // } else {
+        //     for key in merge_keys.iter() {
+        //         if let Some(d) = self.fields.get(key) {
+        //             /*
+        //              * To merge items, we need to have a unique id computed to taking into account
+        //              * the component category and some keywords contained in the comment field.
+        //              * In order to avoid wrong merge, first we skip all line that are marked with
+        //              * NP (Not-Poupulated)
+        //              */
+        //             if let Category::Connectors = self.category {
+        //                 /*
+        //                  * In order to compute connector uid, we consider only footprint anche description
+        //                  * because, the comment could be diffent also for same component. This also because
+        //                  * the comment hold the label of pcb connector
+        //                  */
+        //                 if key == "comment" {
+        //                     let mut comment = String::from("Connector");
+        //                     if Regex::new("^NP ").unwrap().is_match(d.to_string().as_str()) {
+        //                         comment = "NP Connector".to_string();
+        //                     }
+        //                     update_field = ("comment".to_string(), Field::Item(comment));
+        //                     self.is_merged = true;
+        //                     self.unique_id = format!("{:}-{:}", self.unique_id, d);
+        //                 }
+        //             } else {
+        //                 self.unique_id = format!("{:}-{:}", self.unique_id, d);
+        //             };
+        //         }
+        //     }
+        // }
 
-        let mut description = Field::Invalid("-".to_string());
-        if let Some(d) = self.fields.get("description") {
-            description = d.clone();
-        };
+        println!("unique ID -> {:}", self.unique_id);
 
-        let mut comment = Field::Invalid("-".to_string());
-        if let Some(d) = self.fields.get("comment") {
-            comment = d.clone();
-        };
+        // let mut description = Field::Invalid("-".to_string());
+        // if let Some(d) = self.fields.get("description") {
+        //     description = d.clone();
+        // };
 
-        let mut footprint = Field::Invalid("-".to_string());
-        if let Some(d) = self.fields.get("footprint") {
-            footprint = d.clone();
-        };
+        // let mut comment = Field::Invalid("-".to_string());
+        // if let Some(d) = self.fields.get("comment") {
+        //     comment = d.clone();
+        // };
 
-        let mut designator = Field::Invalid("-".to_string());
-        if let Some(d) = self.fields.get("designator") {
-            designator = d.clone();
-        };
+        // let mut footprint = Field::Invalid("-".to_string());
+        // if let Some(d) = self.fields.get("footprint") {
+        //     footprint = d.clone();
+        // };
 
-        let mut layer = Field::Invalid("-".to_string());
-        if let Some(d) = self.fields.get("layer") {
-            layer = d.clone();
-        };
+        // let mut designator = Field::Invalid("-".to_string());
+        // if let Some(d) = self.fields.get("designator") {
+        //     designator = d.clone();
+        // };
 
-        self.is_merged = false;
-        self.is_np = false;
-        self.quantity = designator.get_list_len();
+        // let mut layer = Field::Invalid("-".to_string());
+        // if let Some(d) = self.fields.get("layer") {
+        //     layer = d.clone();
+        // };
 
-        self.unique_id = format!(
-            "{:?}-{}-{}-{}",
-            self.category, comment, footprint, description
-        );
+        // self.is_merged = false;
+        // self.is_np = false;
+        // self.quantity = designator.get_list_len();
 
-        /*
-         * To merge items, we need to have a unique id computed to taking into account
-         * the component category and some keywords contained in the comment field.
-         * In order to avoid wrong merge, first we skip all line that are marked with
-         * NP (Not-Poupulated)
-         */
-        match self.category {
-            Category::Connectors => {
-                /*
-                 * In order to compute connector uid, we consider only footprint anche description
-                 * because, the comment could be diffent also for same component. This also because
-                 * the comment hold the label of pcb connector
-                 */
-                if Regex::new("^NP ")
-                    .unwrap()
-                    .is_match(comment.to_string().as_str())
-                {
-                    comment = Field::Item("NP Connector".to_string());
-                } else {
-                    comment = Field::Item("Connector".to_string());
-                }
-                self.unique_id = format!(
-                    "{:?}-{}-{}-{}-connector",
-                    self.category, comment, footprint, description
-                );
-                self.is_merged = true;
-            }
-            Category::Mechanicals => {
-                /*
-                 * Tactile switch could be have different label, but the component was same
-                 */
-                if footprint.to_string().to_lowercase().contains("tactile") {
-                    comment = Field::Item("Tactile Switch".to_string());
-                    self.unique_id =
-                        format!("{:?}-{}-{}-tactile", self.category, footprint, description);
-                    self.is_merged = true;
-                }
-            }
-            Category::Diode => {
-                /*
-                 * Diode led could be have different label, but the component was same
-                 */
-                if footprint.to_string().to_lowercase().contains("LED") {
-                    comment = Field::Item("Diode LED".to_string());
-                    self.unique_id =
-                        format!("{:?}-{}-{}-LED", self.category, footprint, description);
-                    self.is_merged = true;
-                }
-            }
-            Category::IC => {
-                if footprint.to_string().to_lowercase().contains("rele")
-                    || footprint.to_string().to_lowercase().contains("relay")
-                {
-                    comment = Field::Item("Diode LED".to_string());
-                    self.unique_id =
-                        format!("{:?}-{}-{}-relay", self.category, footprint, description);
-                    self.is_merged = true;
-                }
-            }
-            _ => {}
-        };
+        // self.unique_id = format!(
+        //     "{:?}-{}-{}-{}",
+        //     self.category, comment, footprint, description
+        // );
 
-        info!(
-            "unique id >> {:} {:} {:} {:}",
-            self.unique_id, comment, footprint, description,
-        );
-        self.fields.entry("comment".to_string()).or_insert(comment);
+        // info!(
+        //     "unique id >> {:} {:} {:} {:}",
+        //     self.unique_id, comment, footprint, description,
+        // );
+        // self.fields.entry("comment".to_string()).or_insert(comment);
+        // self.fields.entry(update_field.0).or_insert(update_field.1);
         self.clone()
     }
 }
@@ -597,13 +592,6 @@ impl Field {
                 }
             }
             _ => "".to_string(),
-        }
-    }
-
-    fn get_list_len(&self) -> usize {
-        match self {
-            Field::List(m) => m.len(),
-            _ => 0,
         }
     }
 

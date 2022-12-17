@@ -139,7 +139,7 @@ async fn merge_view_post(Json(payload): Json<MergeCfg>) -> Json<ItemsTable> {
         file_name = payload.merge_file_name;
     }
 
-    let bom = Bom::loader(files.as_slice(), &[payload.merge_keys]);
+    let bom = Bom::loader(files.as_slice(), &payload.merge_keys);
     let data = bom.merge().odered_vector_table();
     OutJobXlsx::new(Path::new(MERGED_DIRECTORY).join(file_name)).write(&data);
     Json(data)
