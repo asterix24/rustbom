@@ -1,0 +1,22 @@
+002375522887514;false;false;** R Resistors **;0;R12, R13;15k;0402_[0603];Resistor;Bottom;smd;;334324;;;;
+113786816206782;false;false;** C Capacitors **;0;C2, C3, C4;1uF;1206_[3216];Ceramic X5R 35V, 50V;Bottom;thd;53634;FGJLDKFJ;6UBFGB;45DG345;TEST;567568
+163587748270507;false;false;** D Diode **;0;D2;+5V;0402_[0603];Led RED;Bottom;smd;;334324;;;;
+187176886026445;false;false;** S Mechanicals **;0;S1;A;THD;Tactile AAAA;;;;;;;;
+222071072552888;false;false;** R Resistors **;0;R14, R15;10k;0603_[1608];Resistor;Bottom;smd;;334324;;;;
+281530281688488;false;false;** - Invalid **;0;;;;;;;;;;;;
+301270126240683;false;false;** - Invalid **;0;;;;;;;;;;;;
+342314160130474;false;false;** R Resistors **;0;R1, R2, R3, R4, R5, R6, R7, R8, R9, R10;10k;0402_[0603];Resistor;Top;smd;55665;;;;;
+452884122035052;false;false;** C Capacitors **;0;C0, C1;33pF;0603_[1608];Ceramic 50V NP0/C0G;Top;smd;23425;;;;PROVA;1234
+467152630106066;false;false;** D Diode **;0;D1;A;0402_[0603];Diode LED GREEN;;smd;;;;;;
+471103845263304;false;false;** R Resistors **;0;R123, R25, R78;10k;0402_[0603];Resistor;Top;smd;55665;;;;;
+473302546448241;false;false;** J Connectors **;0;J2;due;SOCKET;Socket, 2.54mm;Top;thd;;;;99000;;
+537815057558422;false;false;** L Inductors **;0;L1;10uH;0603_[1608];Inductor;Top;thd;33423;;;;;
+567537020242561;false;false;** D Diode **;0;D1;+3.3V;0402_[0603];Led RED;Bottom;smd;;334324;;;;
+568811041885180;false;false;** - Invalid **;0;;NODE 123;;;;;;;;;;
+626884562654820;false;false;** S Mechanicals **;0;S2;B;THD;Tactile BBBB;;;;;;;;
+663383482686556;false;false;** D Diode **;0;D2;B;0402_[0603];Diode LED GREEN;;smd;;;;;;
+717763261285042;false;false;** J Connectors **;0;J1;uno;SOCKET;Socket, 2.54mm;Top;thd;;;;980809;;
+722671664513124;false;false;** - Invalid **;0;;;;;;;;;;;;
+781255432060145;false;false;** R Resistors **;0;R14, R15;15k;0402_[0603];Resistor;Bottom;smd;12344;334324;;;;
+884717530110662;false;false;** C Capacitors **;0;C5, C6;2.2uF;0603_[1608];Ceramic X7R 10V;Bottom;smd;43534;ASDFADS;;;RE-TEST;ABCD
+Quantity;Designator;Comment;Footprint;Description;Layer;Mounttechnology;Code farnell;Code mouser;Code digikey;Note mouser;Note uno;Code due

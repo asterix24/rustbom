@@ -1,0 +1,23 @@
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+Quantity,Designator,Comment,Footprint,Description,Note uno,Code due,layer,MountTechnology,,NODE 123,CODE farnell,CODE mouser,NOTE mouser,CODE digikey
+2,"C0, C1",33pF,0603_[1608],Ceramic 50V NP0/C0G,prova,1234,Top,smd,,123,23425,,,
+2,"C5, C6",2.2uF,0603_[1608],Ceramic X7R 10V,Re-test,abcd,Bottom,smd,,,43534,asdfads,,
+3,"C2, C3, C4",1uF,1206_[3216],"Ceramic X5R 35V, 50V",test,567568,Bottom,thd,,,53634,fgjldkfj,45dg345,6ubfgb
+1,L1,10uH,0603_[1608],Inductor,,,Top,thd,,,33423,,,
+2,"R14, R15",10k,0603_[1608],Resistor,,,Bottom,smd,,,,334324,,
+10,"R1, R2, R3, R4, R5, R6, R7, R8, R9, R10",10k,0402_[0603],Resistor,,,Top,smd,,,55665,,,
+3,"R123, R25, R78",10k,0402_[0603],Resistor,,,Top,smd,,,55665,,,
+2,"R12, R13",15k,0402_[0603],Resistor,,,Bottom,smd,,,,334324,,
+2,"R14, R15",15k,0402_[0603],Resistor,,,Bottom,smd,,,12344,334324,,
+1,D1,+3.3V,0402_[0603],Led RED,,,Bottom,smd,,,,334324,,
+1,D2,+5V,0402_[0603],Led RED,,,Bottom,smd,,,,334324,,
+1,J1,uno,SOCKET,"Socket, 2.54mm",,,Top,thd,,,,,980809,
+1,J2,due,SOCKET,"Socket, 2.54mm",,,Top,thd,,,,,99000,
+1,D1,A,0402_[0603],Diode LED GREEN,,,,smd,,,,,,
+1,D2,B,0402_[0603],Diode LED GREEN,,,,smd,,,,,,
+2,S1,A,THD,Tactile AAAA,,,,,,,,,,
+2,S2,B,THD,Tactile BBBB,,,,,,,,,,
+
+
