@@ -1,0 +1,7 @@
+"Quantity","Designator","Comment","Footprint","Description"
+1,"C0","100nF","0603_[1608]","Ceramic"
+1,"C1","100nF","0603_[1608]","Ceramic"
+1,"R0","1k","0603_[1608]","Resistor"
+1,"R1","1k","0603_[1608]","Resistor"
+1,"J1","uno","SOCKET","Socket, 2.54mm"
+1,"J2","due","SOCKET","Socket, 2.54mm"

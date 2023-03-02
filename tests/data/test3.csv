@@ -1,0 +1,8 @@
+Quantity,Designator,Comment,Footprint,Description
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,
+14,"D6, D7, D8, D9, D10, D11, D12, D13, D14, D15, D2000, D2001, D2016, D3017",LINUX_ACT,0603_[1608]_LED,Diode LED Green
+3,"D2013, D2014, D2015",-12V,0603_[1608]_LED,LED Green

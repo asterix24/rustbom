@@ -1,0 +1,8 @@
+** - Invalid **;false;false;** - Invalid **;0;;;;;;
+** C Capacitors **-C0;false;false;** C Capacitors **;1;C0;100nF;0603_[1608];Ceramic;;
+** C Capacitors **-C1;false;false;** C Capacitors **;1;C1;100nF;0603_[1608];Ceramic;;
+** J Connectors **-J1;false;false;** J Connectors **;1;J1;uno;SOCKET;Socket, 2.54mm;;
+** J Connectors **-J2;false;false;** J Connectors **;1;J2;due;SOCKET;Socket, 2.54mm;;
+** R Resistors **-R0;false;false;** R Resistors **;1;R0;1k;0603_[1608];Resistor;;
+** R Resistors **-R1;false;false;** R Resistors **;1;R1;1k;0603_[1608];Resistor;;
+Quantity;Designator;Comment;Footprint;Description;Layer;Mounttechnology

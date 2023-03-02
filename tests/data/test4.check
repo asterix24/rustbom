@@ -1,0 +1,5 @@
+** - Invalid **;false;false;** - Invalid **;0;;;;;;
+** J Connectors **-Connector-SOCKET-Socket, 2.54mm;true;false;** J Connectors **;3;J1, J2, J20;Connector;SOCKET;Socket, 2.54mm;;
+** J Connectors **-Connector-SOCKET-pin, 2.54mm;true;false;** J Connectors **;1;J10;Connector;SOCKET;pin, 2.54mm;;
+** J Connectors **-NP Connector-SOCKET-NP Socket, 2.54mm;true;true;** J Connectors **;4;J3, J4, J44, J5;NP Connector;SOCKET;NP Socket, 2.54mm;;
+Quantity;Designator;Comment;Footprint;Description;Layer;Mounttechnology
