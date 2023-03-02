@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use calamine::{open_workbook_auto, DataType, Reader};
-use log::{debug, error, info, warn};
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use rand_pcg::{Pcg32, Pcg64};
+use log::{debug, info, warn};
+use rand::{Rng, SeedableRng};
+use rand_pcg::Pcg32;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -415,85 +415,81 @@ impl Item {
 
     fn generate_uuid(&mut self, merge_keys: &[String], seed: &mut Pcg32) -> Self {
         self.unique_id = "".to_string();
+        self.is_merged = false;
+        self.is_np = false;
+
+        // Update reference count
+        if let Some(d) = self.fields.get("designator") {
+            if let Field::List(l) = d {
+                self.quantity = l.len();
+            }
+        };
+
+        // No keys mergs, so get all items
         if merge_keys.is_empty() {
             for _ in 0..15 {
                 self.unique_id = format!("{}{:}", self.unique_id, seed.gen_range(0..9));
             }
+            return self.clone();
         }
-        //let mut update_field: (String, Field) = ("".to_string(), Field::Invalid("".to_string()));
-        // } else {
-        //     for key in merge_keys.iter() {
-        //         if let Some(d) = self.fields.get(key) {
-        //             /*
-        //              * To merge items, we need to have a unique id computed to taking into account
-        //              * the component category and some keywords contained in the comment field.
-        //              * In order to avoid wrong merge, first we skip all line that are marked with
-        //              * NP (Not-Poupulated)
-        //              */
-        //             if let Category::Connectors = self.category {
-        //                 /*
-        //                  * In order to compute connector uid, we consider only footprint anche description
-        //                  * because, the comment could be diffent also for same component. This also because
-        //                  * the comment hold the label of pcb connector
-        //                  */
-        //                 if key == "comment" {
-        //                     let mut comment = String::from("Connector");
-        //                     if Regex::new("^NP ").unwrap().is_match(d.to_string().as_str()) {
-        //                         comment = "NP Connector".to_string();
-        //                     }
-        //                     update_field = ("comment".to_string(), Field::Item(comment));
-        //                     self.is_merged = true;
-        //                     self.unique_id = format!("{:}-{:}", self.unique_id, d);
-        //                 }
-        //             } else {
-        //                 self.unique_id = format!("{:}-{:}", self.unique_id, d);
-        //             };
-        //         }
-        //     }
-        // }
 
+        // Vector of keys to merge
+        let mut mm: Vec<String> = vec![];
+        mm.push(format!("{}", self.category));
+
+        // Ckeck if line is NP
+        for item in merge_keys.iter() {
+            if let Some(d) = self.fields.get(item) {
+                // anyway the NP mark should not merge
+                if Regex::new("^NP ").unwrap().is_match(d.to_string().as_str()) {
+                    self.is_np = true;
+                    println!("np {:?}", d);
+                }
+            }
+        }
+
+        for item in merge_keys.iter() {
+            if let Some(d) = self.fields.get(item) {
+                let mut field: String = format!("{}", d.clone());
+                match self.category {
+                    Category::Connectors => {
+                        if "comment" == item {
+                            field = String::from("Connector");
+                            if self.is_np {
+                                field = String::from("NP Connector");
+                            }
+
+                            self.is_merged = true;
+                            self.fields.remove("comment");
+                            self.fields
+                                .insert(String::from("comment"), Field::Item(field.clone()));
+                        }
+                    }
+                    Category::Diode => {
+                        if "footprint" == item {
+                            if field.contains("LED") {
+                                field = String::from("LED");
+                                if self.is_np {
+                                    field = String::from("NP LED");
+                                }
+                            }
+
+                            self.is_merged = true;
+                            self.fields.remove("comment");
+                            self.fields
+                                .insert(String::from("comment"), Field::Item(field.clone()));
+                        }
+                    }
+                    _ => (),
+                }
+                println!(">>>>>>>>>{}", field);
+                mm.push(field);
+            };
+        }
+
+        // generate_uuid
+        self.unique_id = mm.join("-");
         println!("unique ID -> {:}", self.unique_id);
-
-        // let mut description = Field::Invalid("-".to_string());
-        // if let Some(d) = self.fields.get("description") {
-        //     description = d.clone();
-        // };
-
-        // let mut comment = Field::Invalid("-".to_string());
-        // if let Some(d) = self.fields.get("comment") {
-        //     comment = d.clone();
-        // };
-
-        // let mut footprint = Field::Invalid("-".to_string());
-        // if let Some(d) = self.fields.get("footprint") {
-        //     footprint = d.clone();
-        // };
-
-        // let mut designator = Field::Invalid("-".to_string());
-        // if let Some(d) = self.fields.get("designator") {
-        //     designator = d.clone();
-        // };
-
-        // let mut layer = Field::Invalid("-".to_string());
-        // if let Some(d) = self.fields.get("layer") {
-        //     layer = d.clone();
-        // };
-
-        // self.is_merged = false;
-        // self.is_np = false;
-        // self.quantity = designator.get_list_len();
-
-        // self.unique_id = format!(
-        //     "{:?}-{}-{}-{}",
-        //     self.category, comment, footprint, description
-        // );
-
-        // info!(
-        //     "unique id >> {:} {:} {:} {:}",
-        //     self.unique_id, comment, footprint, description,
-        // );
-        // self.fields.entry("comment".to_string()).or_insert(comment);
-        // self.fields.entry(update_field.0).or_insert(update_field.1);
         self.clone()
     }
 }
