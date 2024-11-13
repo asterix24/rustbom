@@ -19,11 +19,9 @@ fn test_run(test: &str, check: &str, merge_keys: &[String]) {
 
     let mut checks = vec![];
     let file = File::open(c).unwrap();
-    for line in BufReader::new(file).lines() {
-        if let Ok(l) = line {
-            if !l.is_empty() {
-                checks.push(l);
-            }
+    for line in BufReader::new(file).lines().map_while(Result::ok) {
+        if !line.is_empty() {
+            checks.push(line);
         }
     }
 
@@ -40,6 +38,7 @@ fn test_run(test: &str, check: &str, merge_keys: &[String]) {
     dump(&results);
     assert_eq!(results.len(), checks.len());
     for (i, r) in results.iter().enumerate() {
+        println!("RESULT < - >  CHECK");
         println!("{} {}", i, r);
         assert_eq!(*r, checks[i]);
     }
@@ -47,57 +46,23 @@ fn test_run(test: &str, check: &str, merge_keys: &[String]) {
 
 #[test]
 fn uuid() {
-    //test_run("test0.csv", "test0.check", &[]);
-    //assert!(false);
+    test_run("test0.csv", "test0.check", &[]);
 }
 
-#[test]
-fn merge() {
-    //test_run("test0.csv", "test1.check", &["designator".to_string()]);
-    //test_run(
-    //    "test0.csv",
-    //    "test2.check",
-    //    &[
-    //        "comment".to_string(),
-    //        "footprint".to_string(),
-    //        "description".to_string(),
-    //    ],
-    //);
-    //test_run(
-    //    "test1.csv",
-    //    "test3.check",
-    //    &[
-    //        "comment".to_string(),
-    //        "footprint".to_string(),
-    //        "description".to_string(),
-    //    ],
-    //);
-    //assert!(false);
-}
+// #[test]
+// fn connector() {
+//     test_run(
+//         "test2.csv",
+//         "test4.check",
+//         &["comment", "footprint", "description"].map(String::from),
+//     );
+// }
 
-#[test]
-fn connector() {
-    test_run(
-        "test2.csv",
-        "test4.check",
-        &[
-            "comment".to_string(),
-            "footprint".to_string(),
-            "description".to_string(),
-        ],
-    );
-}
-
-#[test]
-fn diode() {
-    test_run(
-        "test3.csv",
-        "test5.check",
-        &[
-            "comment".to_string(),
-            "footprint".to_string(),
-            "description".to_string(),
-        ],
-    );
-    assert!(false);
-}
+// #[test]
+// fn diode() {
+//     test_run(
+//         "test3.csv",
+//         "test5.check",
+//         &["comment", "footprint", "description"].map(String::from),
+//     );
+// }

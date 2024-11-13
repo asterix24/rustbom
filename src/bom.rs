@@ -262,9 +262,12 @@ impl Bom {
         */
         let mut merged: HashMap<String, Item> = HashMap::new();
         for item in self.items.iter() {
+            print!("ID-> {:?}\n", item);
             if let Some(prev) = merged.get_mut(&item.unique_id) {
-                /* The rows with same unique id should be merge, so first we
-                get out the Fields that was mergeable */
+                /*
+                 * We found a row with same unique_id, so will go to merge.
+                 * First we start with designator, and update also the quantity.
+                 */
                 if let Some(Field::List(dd)) = prev.fields.get_mut("designator") {
                     if let Some(Field::List(last_dd)) = item.fields.get("designator") {
                         dd.extend(last_dd.clone());
@@ -274,7 +277,11 @@ impl Bom {
                     prev.quantity = dd.len();
                 }
 
+                /*
+                 * Parse Filed vector, to merge columns
+                 */
                 for c in item.fields.keys() {
+                    // If in field we found a heder we skip it
                     if STD_HEADERS.contains(&c.as_str()) {
                         continue;
                     }
@@ -367,18 +374,6 @@ pub struct Item {
 }
 
 impl Item {
-    pub fn default() -> Self {
-        let fields = HashMap::new();
-        Self {
-            quantity: 0,
-            unique_id: "".to_string(),
-            is_merged: false,
-            is_np: false,
-            category: Category::Invalid,
-            fields,
-        }
-    }
-
     pub fn guess_category(&mut self) -> Self {
         self.category = match self.fields.get("designator") {
             Some(d) => {
@@ -418,11 +413,12 @@ impl Item {
         self.is_merged = false;
         self.is_np = false;
 
-        // Update reference count
+        // Update quantity counting the designator elements
         if let Some(d) = self.fields.get("designator") {
-            if let Field::List(l) = d {
-                self.quantity = l.len();
-            }
+            self.quantity = match d {
+                Field::List(l) => l.len(),
+                _ => 0,
+            };
         };
 
         // No keys mergs, so get all items
@@ -489,8 +485,22 @@ impl Item {
 
         // generate_uuid
         self.unique_id = mm.join("-");
-        println!("unique ID -> {:}", self.unique_id);
+        println!("unique ID -> {:} {:?}", self.unique_id, self.fields);
         self.clone()
+    }
+}
+
+impl Default for Item {
+    fn default() -> Self {
+        let fields = HashMap::new();
+        Self {
+            quantity: 0,
+            unique_id: "".to_string(),
+            is_merged: false,
+            is_np: false,
+            category: Category::Invalid,
+            fields,
+        }
     }
 }
 
@@ -581,7 +591,7 @@ impl Field {
     fn get_element_list(&self) -> String {
         match self {
             Field::List(m) => {
-                if let Some(x) = m.get(0) {
+                if let Some(x) = m.first() {
                     x.to_lowercase()
                 } else {
                     "".to_string()
@@ -594,13 +604,7 @@ impl Field {
     fn from_header_and_value(header: &str, value: &str) -> Result<(String, Field)> {
         let mut hdr = header.to_lowercase();
         let field: Field = match hdr.as_str() {
-            "designator" => Field::List(
-                value
-                    .to_string()
-                    .split(',')
-                    .map(|m| m.trim().to_string())
-                    .collect(),
-            ),
+            "designator" => Field::List(value.split(',').map(|m| m.trim().to_string()).collect()),
             "comment" | "footprint" | "description" | "mounttechnology" | "layer" => {
                 Field::Item(value.to_string())
             }
@@ -623,3 +627,25 @@ impl Field {
         Ok((hdr, field))
     }
 }
+
+//#[cfg(test)]
+//mod tests {
+//    use super::*;
+//    #[test]
+//    fn test_merge1() -> Result<(), String> {
+//        let files = ["tests/data/test0.xlsx"];
+//        let keys = [
+//            "Quantity",
+//            "Designator",
+//            "Comment",
+//            "Footprint",
+//            "Description",
+//        ];
+//        let bom = Bom::loader(files.as_slice(), &keys.map(String::from));
+//        let data = bom.merge().odered_vector_table();
+//        print!("{:?}", data.headers);
+//        print!("{:?}", data.rows);
+//
+//        Ok(())
+//    }
+//}

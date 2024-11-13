@@ -1,8 +1,8 @@
-142608122354560;false;false;** R Resistors **;0;R1;1k;0603_[1608];Resistor;;
-166127555020664;false;false;** R Resistors **;0;R0;1k;0603_[1608];Resistor;;
-203525460377515;false;false;** C Capacitors **;0;C0;100nF;0603_[1608];Ceramic;;
-472660858777428;false;false;** J Connectors **;0;J1;uno;SOCKET;Socket, 2.54mm;;
-561843166652704;false;false;** C Capacitors **;0;C1;100nF;0603_[1608];Ceramic;;
+142608122354560;false;false;** R Resistors **;1;R1;1k;0603_[1608];Resistor;;
+166127555020664;false;false;** R Resistors **;1;R0;1k;0603_[1608];Resistor;;
+203525460377515;false;false;** C Capacitors **;1;C0;100nF;0603_[1608];Ceramic;;
+472660858777428;false;false;** J Connectors **;1;J1;uno;SOCKET;Socket, 2.54mm;;
+561843166652704;false;false;** C Capacitors **;1;C1;100nF;0603_[1608];Ceramic;;
 672767514163057;false;false;** - Invalid **;0;;;;;;
-737633365167084;false;false;** J Connectors **;0;J2;due;SOCKET;Socket, 2.54mm;;
+737633365167084;false;false;** J Connectors **;1;J2;due;SOCKET;Socket, 2.54mm;;
 Quantity;Designator;Comment;Footprint;Description;Layer;Mounttechnology
