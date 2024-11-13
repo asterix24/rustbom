@@ -64,7 +64,7 @@ pub fn convert_comment_to_value(comment: &str) -> (f32, i32) {
         .map(|item| item.trim())
         .collect::<Vec<_>>();
 
-    let value = match v.get(0) {
+    let value = match v.first() {
         None => panic!("No component value to parse"),
         Some(v) => v,
     };
@@ -240,7 +240,7 @@ mod tests {
     }
     #[test]
     fn test_detect_measure_unit() {
-        let test_data = vec![
+        let test_data = [
             ["C123", "F"],
             ["R123", "ohm"],
             ["L232", "H"],
