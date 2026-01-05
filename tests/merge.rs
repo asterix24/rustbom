@@ -45,8 +45,9 @@ fn test_run(test: &str, check: &str, merge_keys: &[String]) {
 }
 
 #[test]
-fn uuid() {
+fn merge_tests() {
     test_run("test0.csv", "test0.check", &[]);
+    test_run("test1.csv", "test1.check", &["comment"].map(String::from));
 }
 
 // #[test]

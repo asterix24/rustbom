@@ -1,5 +1,5 @@
 [package]
-name = "mergebom-web"
+name = "rustbom"
 version = "0.1.0"
 edition = "2021"
 authors = ["Daniele Basile <asterix24@gmail.com>"]

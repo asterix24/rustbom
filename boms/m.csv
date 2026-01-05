@@ -1,0 +1,7 @@
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+"Quantity","Designator","Comment","Footprint","Description","layer","MountTechnology","NOTE 1","NODE 2","CODE 1","CODE 2","CODE 3"
+"1","C0","comment 0","0603","description 0","top","SMD","n1","n2","c1","C2","C3"
+"1","C1","comment 1","0603","description 0","top","SMD","n1a","n2a","c1a","C2a","C3a"

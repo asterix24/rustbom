@@ -6,3 +6,14 @@
 ** R Resistors **-R0;false;false;** R Resistors **;1;R0;1k;0603_[1608];Resistor;;
 ** R Resistors **-R1;false;false;** R Resistors **;1;R1;1k;0603_[1608];Resistor;;
 Quantity;Designator;Comment;Footprint;Description;Layer;Mounttechnology
+
+
+** - Invalid **;false;false;** - Invalid **;0;;;;;;
+** C Capacitors **-100nF;false;false;** C Capacitors **;2;C0, C1;100nF;0603_[1608];Ceramic;;
+** D Diode **-+3.3V;false;false;** D Diode **;1;D1;+3.3V;0402_[0603];Led RED;;
+** D Diode **-+5V;false;false;** D Diode **;1;D2;+5V;0402_[0603];Led RED;;
+** D Diode **-A;false;false;** D Diode **;1;D1;A;0402_[0603];Diode LED GREEN;;
+** D Diode **-B;false;false;** D Diode **;1;D2;B;0402_[0603];Diode LED GREEN;;
+** J Connectors **-Connector;true;false;** J Connectors **;2;J1, J2;Connector;SOCKET;Socket, 2.54mm;;
+** R Resistors **-1k;false;false;** R Resistors **;2;R0, R1;1k;0603_[1608];Resistor;;
+Quantity;Designator;Comment;Footprint;Description;Layer;Mounttechnology
